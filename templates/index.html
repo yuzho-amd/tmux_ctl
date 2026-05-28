@@ -154,6 +154,21 @@
       border-radius: 3px;
     }
 
+    .tmux-id {
+      flex-shrink: 0;
+      align-self: flex-start;
+      margin-top: 3px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 10px;
+      color: #6e7681;
+      background: #0f1117;
+      border: 1px solid #30363d;
+      border-radius: 3px;
+      padding: 1px 5px;
+      cursor: default;
+      user-select: all;
+    }
+
     .overlay-title {
       flex: 1;
       min-width: 0;
@@ -322,6 +337,111 @@
     }
 
     .toast.show { display: block; }
+
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.55);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 150;
+      padding: 24px;
+    }
+
+    .modal-backdrop.active { display: flex; }
+
+    .modal {
+      width: min(420px, 100%);
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 10px;
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+      overflow: hidden;
+    }
+
+    .modal-header {
+      padding: 16px 18px 8px;
+      font-size: 16px;
+      font-weight: 600;
+      color: #e6edf3;
+    }
+
+    .modal-body {
+      padding: 8px 18px 16px;
+      color: #8b949e;
+      font-size: 13px;
+    }
+
+    .tmux-options {
+      margin-top: 12px;
+      max-height: 220px;
+      overflow-y: auto;
+      border: 1px solid #21262d;
+      border-radius: 8px;
+      background: #0d1117;
+    }
+
+    .tmux-option {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-bottom: 1px solid #21262d;
+      cursor: pointer;
+      color: #e6edf3;
+    }
+
+    .tmux-option:last-child { border-bottom: none; }
+
+    .tmux-option:hover { background: #161b22; }
+
+    .tmux-option input { accent-color: #238636; }
+
+    .tmux-option-meta {
+      margin-left: auto;
+      font-size: 11px;
+      color: #8b949e;
+    }
+
+    .tmux-empty {
+      padding: 14px 12px;
+      color: #8b949e;
+      font-size: 13px;
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      padding: 12px 18px 16px;
+      border-top: 1px solid #21262d;
+    }
+
+    .modal-actions button {
+      background: #21262d;
+      border: 1px solid #30363d;
+      color: #e6edf3;
+      padding: 8px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    .modal-actions button:hover { background: #30363d; }
+
+    .modal-actions button.primary {
+      background: #238636;
+      border-color: #238636;
+      color: #fff;
+    }
+
+    .modal-actions button.primary:hover { background: #2ea043; }
+
+    .modal-actions button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
   </style>
 </head>
 <body>
@@ -351,6 +471,25 @@
 
   <div class="toast" id="toast"></div>
 
+  <div class="modal-backdrop" id="createModal">
+    <div class="modal" role="dialog" aria-labelledby="createModalTitle">
+      <div class="modal-header" id="createModalTitle">新建 session</div>
+      <div class="modal-body">
+        <p>选择复用已有 tmux session，或新建一个。</p>
+        <div class="tmux-options" id="tmuxOptions">
+          <label class="tmux-option">
+            <input type="radio" name="tmuxChoice" value="" checked>
+            <span>新建 tmux session</span>
+          </label>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" id="createCancelBtn">取消</button>
+        <button type="button" class="primary" id="createConfirmBtn">创建</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     const initialSessions = {{ initial_sessions | tojson }};
     const fetchOpts = { cache: 'no-store' };
@@ -361,6 +500,10 @@
     const overlayTitle = document.getElementById('overlayTitle');
     const exitBtn = document.getElementById('exitBtn');
     const toast = document.getElementById('toast');
+    const createModal = document.getElementById('createModal');
+    const tmuxOptions = document.getElementById('tmuxOptions');
+    const createCancelBtn = document.getElementById('createCancelBtn');
+    const createConfirmBtn = document.getElementById('createConfirmBtn');
 
     let activeView = null;
 
@@ -488,6 +631,11 @@
       attachTitleEditor(session, titleEl);
       header.appendChild(titleEl);
 
+      const tmuxEl = document.createElement('span');
+      tmuxEl.className = 'tmux-id';
+      tmuxEl.textContent = session.tmuxSession || `agent-${session.id}`;
+      tmuxEl.title = 'tmux session 名称（tmux attach -t ...）';
+
       const actions = document.createElement('div');
       actions.className = 'cell-actions';
 
@@ -516,6 +664,7 @@
 
       actions.appendChild(maxBtn);
       actions.appendChild(closeBtn);
+      header.appendChild(tmuxEl);
       header.addEventListener('click', (e) => e.stopPropagation());
       header.addEventListener('dblclick', (e) => e.stopPropagation());
       header.appendChild(actions);
@@ -571,22 +720,113 @@
     overlayTitle.addEventListener('click', (e) => e.stopPropagation());
     overlayTitle.addEventListener('dblclick', (e) => e.stopPropagation());
 
-    addBtn.addEventListener('click', async () => {
+    function closeCreateModal() {
+      createModal.classList.remove('active');
+      createConfirmBtn.disabled = false;
+    }
+
+    function renderTmuxOptions(available) {
+      tmuxOptions.innerHTML = `
+        <label class="tmux-option">
+          <input type="radio" name="tmuxChoice" value="" checked>
+          <span>新建 tmux session</span>
+        </label>
+      `;
+
+      if (!available.length) {
+        const empty = document.createElement('div');
+        empty.className = 'tmux-empty';
+        empty.textContent = '没有可复用的 tmux session';
+        tmuxOptions.appendChild(empty);
+        return;
+      }
+
+      for (const item of available) {
+        const label = document.createElement('label');
+        label.className = 'tmux-option';
+
+        const input = document.createElement('input');
+        input.type = 'radio';
+        input.name = 'tmuxChoice';
+        input.value = item.name;
+
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = item.name;
+
+        const meta = document.createElement('span');
+        meta.className = 'tmux-option-meta';
+        const attached = item.attached ? '已 attach' : '未 attach';
+        meta.textContent = `${item.windows} 窗 · ${attached}`;
+
+        label.appendChild(input);
+        label.appendChild(nameSpan);
+        label.appendChild(meta);
+        tmuxOptions.appendChild(label);
+      }
+    }
+
+    async function openCreateModal() {
+      createModal.classList.add('active');
+      renderTmuxOptions([]);
+
+      try {
+        const res = await fetch('/api/tmux/sessions', fetchOpts);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        renderTmuxOptions(data.available || []);
+      } catch (err) {
+        console.error('load tmux sessions failed:', err);
+        showToast('加载 tmux session 列表失败');
+      }
+    }
+
+    function selectedTmuxChoice() {
+      const checked = tmuxOptions.querySelector('input[name="tmuxChoice"]:checked');
+      return checked ? checked.value.trim() : '';
+    }
+
+    async function createSession(tmuxSession) {
+      createConfirmBtn.disabled = true;
       addBtn.disabled = true;
       try {
-        const res = await fetch('/api/sessions', { ...fetchOpts, method: 'POST' });
+        const opts = { ...fetchOpts, method: 'POST' };
+        if (tmuxSession) {
+          opts.headers = { 'Content-Type': 'application/json' };
+          opts.body = JSON.stringify({ tmuxSession });
+        }
+        const res = await fetch('/api/sessions', opts);
         const data = await res.json();
         if (!res.ok) {
           showToast(data.error || '创建 session 失败');
           return;
         }
+        closeCreateModal();
         grid.appendChild(createCell(data, grid.querySelectorAll('.cell').length));
         updateEmptyState();
       } catch (err) {
         showToast('网络错误: ' + err.message);
       } finally {
+        createConfirmBtn.disabled = false;
         addBtn.disabled = false;
       }
+    }
+
+    createCancelBtn.addEventListener('click', closeCreateModal);
+    createModal.addEventListener('click', (e) => {
+      if (e.target === createModal) closeCreateModal();
+    });
+    createConfirmBtn.addEventListener('click', () => {
+      createSession(selectedTmuxChoice());
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && createModal.classList.contains('active')) {
+        closeCreateModal();
+      }
+    });
+
+    addBtn.addEventListener('click', () => {
+      openCreateModal();
     });
 
     exitBtn.addEventListener('click', closeOverlay);

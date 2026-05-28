@@ -50,6 +50,7 @@ class Session:
     process: subprocess.Popen[Any]
     title: str = field(default="")
     default_title: str = field(default="")
+    tmux_session: str = field(default="")
 
 
 sessions: dict[str, Session] = {}
@@ -94,29 +95,78 @@ def _allocate_port(preferred: int | None = None) -> int:
 
 
 def _tmux_session_name(session_id: str) -> str:
-    return f"agent-{session_id}"
+    return db.default_tmux_session(session_id)
 
 
-def _shell_command(session_id: str) -> list[str]:
+def _shell_command(tmux_name: str) -> list[str]:
     if shutil.which("tmux"):
-        return ["tmux", "new-session", "-A", "-s", _tmux_session_name(session_id)]
+        return ["tmux", "new-session", "-A", "-s", tmux_name]
     return ["bash"]
 
 
-def _kill_tmux_session(session_id: str) -> None:
+def _tmux_has_session(name: str) -> bool:
+    tmux = shutil.which("tmux")
+    if not tmux:
+        return False
+    result = subprocess.run(
+        [tmux, "has-session", "-t", name],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    return result.returncode == 0
+
+
+def _list_system_tmux_sessions() -> list[dict[str, Any]]:
+    tmux = shutil.which("tmux")
+    if not tmux:
+        return []
+    result = subprocess.run(
+        [
+            tmux,
+            "list-sessions",
+            "-F",
+            "#{session_name}\t#{session_windows}\t#{session_attached}",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return []
+    items: list[dict[str, Any]] = []
+    for line in result.stdout.splitlines():
+        if not line.strip():
+            continue
+        parts = line.split("\t")
+        name = parts[0]
+        windows = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 1
+        attached = len(parts) > 2 and parts[2] == "1"
+        items.append({"name": name, "windows": windows, "attached": attached})
+    return items
+
+
+def _kill_tmux_session_by_name(tmux_name: str) -> None:
     tmux = shutil.which("tmux")
     if not tmux:
         return
     subprocess.run(
-        [tmux, "kill-session", "-t", _tmux_session_name(session_id)],
+        [tmux, "kill-session", "-t", tmux_name],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
 
 
-def _spawn_ttyd(ttyd: str, port: int, index_html: str, session_id: str) -> subprocess.Popen[Any]:
+def _kill_tmux_session(session_id: str, tmux_name: str | None = None) -> None:
+    name = (tmux_name or _tmux_session_name(session_id)).strip()
+    if db.count_sessions_with_tmux(name, exclude_id=session_id) > 0:
+        return
+    _kill_tmux_session_by_name(name)
+
+
+def _spawn_ttyd(
+    ttyd: str, port: int, index_html: str, tmux_name: str
+) -> subprocess.Popen[Any]:
     return subprocess.Popen(
-        [ttyd, "-p", str(port), "-W", "-I", index_html, *_shell_command(session_id)],
+        [ttyd, "-p", str(port), "-W", "-I", index_html, *_shell_command(tmux_name)],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         start_new_session=True,
@@ -128,6 +178,7 @@ def _start_session(
     title: str,
     preferred_port: int | None = None,
     default_title: str | None = None,
+    tmux_session: str | None = None,
 ) -> Session:
     ttyd = _find_ttyd()
     if not ttyd:
@@ -135,19 +186,21 @@ def _start_session(
 
     default_title = (default_title or title).strip() or db.next_default_title()
     title = title.strip() or default_title
+    tmux_name = (tmux_session or _tmux_session_name(session_id)).strip()
 
     port = _allocate_port(preferred_port)
     if preferred_port is not None and port != preferred_port:
         db.update_port(session_id, port)
 
     index_html = _ensure_ttyd_index(ttyd)
-    proc = _spawn_ttyd(ttyd, port, index_html, session_id)
+    proc = _spawn_ttyd(ttyd, port, index_html, tmux_name)
     session = Session(
         id=session_id,
         port=port,
         process=proc,
         title=title,
         default_title=default_title,
+        tmux_session=tmux_name,
     )
     sessions[session_id] = session
     return session
@@ -172,15 +225,18 @@ def _ensure_sessions() -> None:
             existing.title = title
             existing.default_title = default_title
             existing.port = int(row["port"])
+            existing.tmux_session = db.tmux_session_for(row)
             continue
         if existing is not None:
             sessions.pop(row["id"], None)
         try:
+            tmux_name = db.tmux_session_for(row)
             _start_session(
                 row["id"],
                 title,
                 int(row["port"]),
                 default_title=default_title,
+                tmux_session=tmux_name,
             )
         except Exception as exc:
             print(f"Warning: failed to restore session {row['id']}: {exc}")
@@ -216,11 +272,13 @@ def _get_session(session_id: str) -> Session | None:
         sessions.pop(session_id, None)
         try:
             title, default_title = _row_to_titles(row)
+            tmux_name = db.tmux_session_for(row)
             return _start_session(
                 row["id"],
                 title,
                 int(row["port"]),
                 default_title=default_title,
+                tmux_session=tmux_name,
             )
         except OSError:
             return None
@@ -247,6 +305,7 @@ def _session_payload(session: Session) -> dict[str, Any]:
         "url": _session_url(session.port),
         "title": title,
         "defaultTitle": default_title,
+        "tmuxSession": session.tmux_session or _tmux_session_name(session.id),
     }
 
 
@@ -344,6 +403,17 @@ def list_sessions():
     return jsonify(_ordered_session_payloads())
 
 
+@app.route("/api/tmux/sessions", methods=["GET"])
+def list_tmux_sessions():
+    bound = db.bound_tmux_sessions()
+    available: list[dict[str, Any]] = []
+    for item in _list_system_tmux_sessions():
+        if item["name"] in bound:
+            continue
+        available.append(item)
+    return jsonify({"available": available})
+
+
 @app.route("/api/sessions", methods=["POST"])
 def create_session():
     _ensure_sessions()
@@ -351,16 +421,39 @@ def create_session():
     if not ttyd:
         return jsonify({"error": "ttyd not found. Install ttyd and ensure it is on PATH."}), 503
 
+    data = request.get_json(silent=True) or {}
+    reuse_tmux = str(data.get("tmuxSession") or "").strip()
+
     session_id = uuid.uuid4().hex[:8]
     default_title = db.next_default_title()
     title = default_title
 
+    if reuse_tmux:
+        if reuse_tmux in db.bound_tmux_sessions():
+            return jsonify({"error": f"tmux session already in use: {reuse_tmux}"}), 409
+        if not _tmux_has_session(reuse_tmux):
+            return jsonify({"error": f"tmux session not found: {reuse_tmux}"}), 404
+        tmux_name = reuse_tmux
+    else:
+        tmux_name = _tmux_session_name(session_id)
+
     try:
-        session = _start_session(session_id, title, default_title=default_title)
+        session = _start_session(
+            session_id,
+            title,
+            default_title=default_title,
+            tmux_session=tmux_name,
+        )
     except OSError as exc:
         return jsonify({"error": f"failed to start ttyd: {exc}"}), 500
 
-    db.save_session(session.id, session.title, session.port, session.default_title)
+    db.save_session(
+        session.id,
+        session.title,
+        session.port,
+        session.default_title,
+        tmux_session=session.tmux_session,
+    )
     return jsonify(_session_payload(session)), 201
 
 
@@ -389,12 +482,15 @@ def update_session(session_id: str):
 @app.route("/api/sessions/<session_id>", methods=["DELETE"])
 def delete_session(session_id: str):
     _ensure_sessions()
+    row = db.get_session(session_id)
+    if row is None and session_id not in sessions:
+        return jsonify({"error": "session not found"}), 404
+
+    tmux_name = db.tmux_session_for(row) if row is not None else _tmux_session_name(session_id)
     session = sessions.pop(session_id, None)
     if session is not None:
         _stop_session(session)
-    elif db.get_session(session_id) is None:
-        return jsonify({"error": "session not found"}), 404
-    _kill_tmux_session(session_id)
+    _kill_tmux_session(session_id, tmux_name)
     db.delete_session(session_id)
     return jsonify({"ok": True})
 
