@@ -1,0 +1,427 @@
+#!/usr/bin/env python3
+"""Simple group-control server: spawn ttyd sessions and display them in a grid."""
+
+from __future__ import annotations
+
+import atexit
+import os
+import shutil
+import signal
+import socket
+import subprocess
+import time
+import urllib.error
+import urllib.request
+import uuid
+from dataclasses import dataclass, field
+from typing import Any
+
+from flask import Flask, jsonify, render_template, request
+
+import db
+
+app = Flask(__name__)
+app.config["TEMPLATES_AUTO_RELOAD"] = True
+app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
+app.jinja_env.auto_reload = True
+db.init_db()
+
+
+@app.after_request
+def _disable_cache(response):
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
+
+ROOT = os.path.dirname(os.path.abspath(__file__))
+TTYD_DIR = os.path.join(ROOT, "ttyd")
+TTYD_INDEX = os.path.join(TTYD_DIR, "index.html")
+TTYD_SCROLLBAR_CSS = os.path.join(TTYD_DIR, "scrollbar.css")
+
+BASE_PORT = int(os.environ.get("TTYD_BASE_PORT", "7681"))
+TTYD_BIN = os.environ.get("TTYD_BIN", shutil.which("ttyd") or "")
+
+
+@dataclass
+class Session:
+    id: str
+    port: int
+    process: subprocess.Popen[Any]
+    title: str = field(default="")
+    default_title: str = field(default="")
+
+
+sessions: dict[str, Session] = {}
+_next_port = BASE_PORT
+
+
+def _find_ttyd() -> str:
+    if TTYD_BIN and os.path.isfile(TTYD_BIN) and os.access(TTYD_BIN, os.X_OK):
+        return TTYD_BIN
+    root = os.path.dirname(os.path.abspath(__file__))
+    for candidate in (
+        os.path.join(root, "bin", "ttyd"),
+        "/usr/bin/ttyd",
+        "/usr/local/bin/ttyd",
+        shutil.which("ttyd") or "",
+    ):
+        if candidate and os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            return candidate
+    return ""
+
+
+def _port_free(port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            sock.bind(("0.0.0.0", port))
+        except OSError:
+            return False
+    return True
+
+
+def _allocate_port(preferred: int | None = None) -> int:
+    global _next_port
+    if preferred is not None and _port_free(preferred):
+        _next_port = max(_next_port, preferred + 1)
+        return preferred
+    port = _next_port
+    while not _port_free(port):
+        port += 1
+    _next_port = port + 1
+    return port
+
+
+def _tmux_session_name(session_id: str) -> str:
+    return f"agent-{session_id}"
+
+
+def _shell_command(session_id: str) -> list[str]:
+    if shutil.which("tmux"):
+        return ["tmux", "new-session", "-A", "-s", _tmux_session_name(session_id)]
+    return ["bash"]
+
+
+def _kill_tmux_session(session_id: str) -> None:
+    tmux = shutil.which("tmux")
+    if not tmux:
+        return
+    subprocess.run(
+        [tmux, "kill-session", "-t", _tmux_session_name(session_id)],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def _spawn_ttyd(ttyd: str, port: int, index_html: str, session_id: str) -> subprocess.Popen[Any]:
+    return subprocess.Popen(
+        [ttyd, "-p", str(port), "-W", "-I", index_html, *_shell_command(session_id)],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+
+
+def _start_session(
+    session_id: str,
+    title: str,
+    preferred_port: int | None = None,
+    default_title: str | None = None,
+) -> Session:
+    ttyd = _find_ttyd()
+    if not ttyd:
+        raise RuntimeError("ttyd not found")
+
+    default_title = (default_title or title).strip() or db.next_default_title()
+    title = title.strip() or default_title
+
+    port = _allocate_port(preferred_port)
+    if preferred_port is not None and port != preferred_port:
+        db.update_port(session_id, port)
+
+    index_html = _ensure_ttyd_index(ttyd)
+    proc = _spawn_ttyd(ttyd, port, index_html, session_id)
+    session = Session(
+        id=session_id,
+        port=port,
+        process=proc,
+        title=title,
+        default_title=default_title,
+    )
+    sessions[session_id] = session
+    return session
+
+
+def _row_to_titles(row: Any) -> tuple[str, str]:
+    title = db.display_title(row)
+    default_title = db.default_title_for(row)
+    return title, default_title
+
+
+def _ensure_sessions() -> None:
+    global _next_port
+
+    rows = db.list_sessions()
+    max_port = BASE_PORT - 1
+    for row in rows:
+        max_port = max(max_port, int(row["port"]))
+        existing = sessions.get(row["id"])
+        title, default_title = _row_to_titles(row)
+        if existing is not None and existing.process.poll() is None:
+            existing.title = title
+            existing.default_title = default_title
+            existing.port = int(row["port"])
+            continue
+        if existing is not None:
+            sessions.pop(row["id"], None)
+        try:
+            _start_session(
+                row["id"],
+                title,
+                int(row["port"]),
+                default_title=default_title,
+            )
+        except Exception as exc:
+            print(f"Warning: failed to restore session {row['id']}: {exc}")
+
+    db_ids = {row["id"] for row in rows}
+    for session_id in list(sessions.keys()):
+        if session_id not in db_ids:
+            _stop_session(sessions.pop(session_id))
+
+    _next_port = max(_next_port, max_port + 1)
+
+
+def _ordered_session_payloads() -> list[dict[str, Any]]:
+    _ensure_sessions()
+    payloads: list[dict[str, Any]] = []
+    for row in db.list_sessions():
+        session = sessions.get(row["id"])
+        if session is not None:
+            payloads.append(_session_payload(session))
+    return payloads
+
+
+def _get_session(session_id: str) -> Session | None:
+    _ensure_sessions()
+    session = sessions.get(session_id)
+    if session is None:
+        return None
+    if session.process.poll() is not None:
+        row = db.get_session(session_id)
+        if row is None:
+            sessions.pop(session_id, None)
+            return None
+        sessions.pop(session_id, None)
+        try:
+            title, default_title = _row_to_titles(row)
+            return _start_session(
+                row["id"],
+                title,
+                int(row["port"]),
+                default_title=default_title,
+            )
+        except OSError:
+            return None
+    return session
+
+
+def _client_host() -> str:
+    host = request.host.split(":")[0]
+    if host in ("0.0.0.0", ""):
+        return "127.0.0.1"
+    return host
+
+
+def _session_url(port: int) -> str:
+    return f"http://{_client_host()}:{port}"
+
+
+def _session_payload(session: Session) -> dict[str, Any]:
+    title = session.title.strip() or session.default_title.strip() or session.id
+    default_title = session.default_title.strip() or title
+    return {
+        "id": session.id,
+        "port": session.port,
+        "url": _session_url(session.port),
+        "title": title,
+        "defaultTitle": default_title,
+    }
+
+
+def _stop_proc(proc: subprocess.Popen[Any]) -> None:
+    if proc.poll() is None:
+        try:
+            os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+            proc.wait(timeout=3)
+        except (ProcessLookupError, subprocess.TimeoutExpired):
+            try:
+                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+
+
+def _stop_session(session: Session) -> None:
+    _stop_proc(session.process)
+
+
+def _scrollbar_css() -> str:
+    with open(TTYD_SCROLLBAR_CSS, encoding="utf-8") as fh:
+        return fh.read()
+
+
+def _fetch_default_ttyd_html(ttyd: str) -> str:
+    port = BASE_PORT
+    while not _port_free(port):
+        port += 1
+    proc = subprocess.Popen(
+        [ttyd, "-p", str(port), "true"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+    try:
+        url = f"http://127.0.0.1:{port}/"
+        for _ in range(50):
+            try:
+                with urllib.request.urlopen(url, timeout=1) as resp:
+                    return resp.read().decode("utf-8", errors="replace")
+            except (urllib.error.URLError, ConnectionError, TimeoutError):
+                time.sleep(0.1)
+        raise RuntimeError("timeout waiting for temp ttyd")
+    finally:
+        _stop_proc(proc)
+
+
+def _ensure_ttyd_index(ttyd: str) -> str:
+    os.makedirs(TTYD_DIR, exist_ok=True)
+    css_mtime = os.path.getmtime(TTYD_SCROLLBAR_CSS)
+    if os.path.isfile(TTYD_INDEX) and os.path.getmtime(TTYD_INDEX) >= css_mtime:
+        return TTYD_INDEX
+
+    html = _fetch_default_ttyd_html(ttyd)
+    css_block = f"<style>\n{_scrollbar_css()}\n</style>"
+    if "</head>" in html:
+        html = html.replace("</head>", css_block + "\n</head>", 1)
+    else:
+        html = css_block + html
+
+    with open(TTYD_INDEX, "w", encoding="utf-8") as fh:
+        fh.write(html)
+    return TTYD_INDEX
+
+
+def _cleanup_all() -> None:
+    for session in list(sessions.values()):
+        _stop_session(session)
+    sessions.clear()
+
+
+def _watch_files() -> list[str]:
+    paths: list[str] = []
+    templates_dir = os.path.join(ROOT, "templates")
+    if os.path.isdir(templates_dir):
+        for name in os.listdir(templates_dir):
+            path = os.path.join(templates_dir, name)
+            if os.path.isfile(path):
+                paths.append(path)
+    if os.path.isfile(TTYD_SCROLLBAR_CSS):
+        paths.append(TTYD_SCROLLBAR_CSS)
+    return paths
+
+
+@app.route("/")
+def index():
+    return render_template(
+        "index.html",
+        initial_sessions=_ordered_session_payloads(),
+    )
+
+
+@app.route("/api/sessions", methods=["GET"])
+def list_sessions():
+    return jsonify(_ordered_session_payloads())
+
+
+@app.route("/api/sessions", methods=["POST"])
+def create_session():
+    _ensure_sessions()
+    ttyd = _find_ttyd()
+    if not ttyd:
+        return jsonify({"error": "ttyd not found. Install ttyd and ensure it is on PATH."}), 503
+
+    session_id = uuid.uuid4().hex[:8]
+    default_title = db.next_default_title()
+    title = default_title
+
+    try:
+        session = _start_session(session_id, title, default_title=default_title)
+    except OSError as exc:
+        return jsonify({"error": f"failed to start ttyd: {exc}"}), 500
+
+    db.save_session(session.id, session.title, session.port, session.default_title)
+    return jsonify(_session_payload(session)), 201
+
+
+@app.route("/api/sessions/<session_id>", methods=["PATCH"])
+def update_session(session_id: str):
+    session = _get_session(session_id)
+    if session is None:
+        return jsonify({"error": "session not found"}), 404
+
+    data = request.get_json(silent=True) or {}
+    if "title" not in data:
+        return jsonify({"error": "title required"}), 400
+
+    title = str(data["title"]).strip()
+    row = db.get_session(session_id)
+    if row is None:
+        return jsonify({"error": "session not found"}), 404
+    default_title = db.default_title_for(row)
+    title = title or default_title
+    session.title = title
+    session.default_title = default_title
+    db.update_title(session_id, title)
+    return jsonify(_session_payload(session))
+
+
+@app.route("/api/sessions/<session_id>", methods=["DELETE"])
+def delete_session(session_id: str):
+    _ensure_sessions()
+    session = sessions.pop(session_id, None)
+    if session is not None:
+        _stop_session(session)
+    elif db.get_session(session_id) is None:
+        return jsonify({"error": "session not found"}), 404
+    _kill_tmux_session(session_id)
+    db.delete_session(session_id)
+    return jsonify({"ok": True})
+
+
+if __name__ == "__main__":
+    host = os.environ.get("HOST", "0.0.0.0")
+    port = int(os.environ.get("PORT", "5000"))
+    debug = os.environ.get("DEBUG", "1").lower() in ("1", "true", "yes")
+    print(f"Agent control UI: http://127.0.0.1:{port}")
+    if not _find_ttyd():
+        print("Warning: ttyd not found — install ttyd before creating sessions.")
+    else:
+        if shutil.which("tmux"):
+            print("Using tmux — terminal work area persists across refresh/restart.")
+        else:
+            print("Warning: tmux not found — install tmux to keep terminal state on refresh.")
+        _ensure_sessions()
+        if sessions:
+            print(f"Restored {len(sessions)} session(s) from SQLite.")
+    if debug:
+        print("Debug mode: code changes will auto-reload the server.")
+    else:
+        atexit.register(_cleanup_all)
+    app.run(
+        host=host,
+        port=port,
+        debug=debug,
+        use_reloader=debug,
+        extra_files=_watch_files() if debug else None,
+    )

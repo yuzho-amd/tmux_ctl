@@ -1,0 +1,47 @@
+/* xterm.js terminal scrollbar — injected into ttyd index.html */
+html,
+body {
+  scrollbar-width: thin;
+  scrollbar-color: #1a1a1a #000;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+html::-webkit-scrollbar-track,
+body::-webkit-scrollbar-track {
+  background: #000;
+}
+
+html::-webkit-scrollbar-thumb,
+body::-webkit-scrollbar-thumb {
+  background: #1a1a1a;
+  border-radius: 2px;
+}
+
+html::-webkit-scrollbar-thumb:hover,
+body::-webkit-scrollbar-thumb:hover {
+  background: #333;
+}
+
+.xterm .xterm-viewport {
+  scrollbar-width: thin;
+  scrollbar-color: #1a1a1a #000;
+}
+
+.xterm-viewport::-webkit-scrollbar {
+  width: 4px;
+  background: #000;
+}
+
+.xterm-viewport::-webkit-scrollbar-thumb {
+  background: #1a1a1a;
+  border-radius: 2px;
+}
+
+.xterm-viewport::-webkit-scrollbar-thumb:hover {
+  background: #333;
+}

@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>Agent Control</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body, #grid, #overlay {
+      scrollbar-width: thin;
+      scrollbar-color: #1a1a1a #000;
+    }
+
+    html::-webkit-scrollbar,
+    body::-webkit-scrollbar,
+    #grid::-webkit-scrollbar,
+    #overlay::-webkit-scrollbar {
+      width: 4px;
+      height: 4px;
+    }
+
+    html::-webkit-scrollbar-track,
+    body::-webkit-scrollbar-track,
+    #grid::-webkit-scrollbar-track,
+    #overlay::-webkit-scrollbar-track {
+      background: #000;
+    }
+
+    html::-webkit-scrollbar-thumb,
+    body::-webkit-scrollbar-thumb,
+    #grid::-webkit-scrollbar-thumb,
+    #overlay::-webkit-scrollbar-thumb {
+      background: #1a1a1a;
+      border-radius: 2px;
+    }
+
+    html::-webkit-scrollbar-thumb:hover,
+    body::-webkit-scrollbar-thumb:hover,
+    #grid::-webkit-scrollbar-thumb:hover,
+    #overlay::-webkit-scrollbar-thumb:hover {
+      background: #333;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #0f1117;
+      color: #e6edf3;
+      min-height: 100vh;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 20px;
+      border-bottom: 1px solid #21262d;
+      background: #161b22;
+    }
+
+    header h1 {
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .hint {
+      font-size: 12px;
+      color: #8b949e;
+    }
+
+    #grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 12px;
+      padding: 16px;
+      min-height: calc(100vh - 52px);
+      align-content: start;
+    }
+
+    #grid.empty {
+      place-items: center;
+      align-content: center;
+    }
+
+    .cell {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      overflow: hidden;
+      aspect-ratio: 4 / 3;
+      cursor: pointer;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+
+    .cell:hover {
+      border-color: #58a6ff;
+      box-shadow: 0 0 0 1px #58a6ff33;
+    }
+
+    .cell-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 6px 10px;
+      background: #21262d;
+      font-size: 12px;
+      color: #8b949e;
+      flex-shrink: 0;
+      position: relative;
+      z-index: 2;
+      pointer-events: auto;
+    }
+
+    .cell-title-box {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .cell-title-display {
+      display: block;
+      flex: 1;
+      min-width: 0;
+      color: #e6edf3 !important;
+      font-size: 12px;
+      line-height: 1.4;
+      padding: 2px 6px;
+      cursor: text;
+      white-space: pre-wrap;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+      min-height: 22px;
+      outline: none;
+    }
+
+    .cell-title-display:empty::before {
+      content: attr(data-default);
+      color: #8b949e;
+    }
+
+    .cell-title-display:hover {
+      background: #0f111733;
+      border-radius: 3px;
+    }
+
+    .cell-title-display:focus {
+      background: #0f1117;
+      box-shadow: 0 0 0 1px #58a6ff;
+      border-radius: 3px;
+    }
+
+    .overlay-title {
+      flex: 1;
+      min-width: 0;
+      background: #0f1117;
+      border: 1px solid #30363d;
+      color: #e6edf3;
+      font-size: 14px;
+      line-height: 1.4;
+      outline: none;
+      padding: 4px 8px;
+      resize: none;
+      white-space: pre-wrap;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+      cursor: text;
+      width: 100%;
+      min-height: 28px;
+      border-radius: 3px;
+      box-sizing: border-box;
+    }
+
+    .cell-actions {
+      display: flex;
+      align-items: flex-start;
+      gap: 2px;
+      flex-shrink: 0;
+    }
+
+    .btn-icon {
+      flex-shrink: 0;
+      align-self: flex-start;
+      margin-top: 1px;
+      background: none;
+      border: none;
+      color: #8b949e;
+      cursor: pointer;
+      font-size: 14px;
+      line-height: 1;
+      padding: 0 4px;
+    }
+
+    .btn-icon:hover { color: #e6edf3; }
+
+    .btn-maximize:hover { color: #58a6ff; }
+
+    .btn-close {
+      font-size: 16px;
+    }
+
+    .btn-close:hover { color: #f85149; }
+
+    .cell iframe {
+      flex: 1;
+      min-height: 0;
+      width: 100%;
+      border: none;
+      background: #000;
+      pointer-events: none;
+    }
+
+    .cell:hover iframe {
+      pointer-events: auto;
+    }
+
+    .fab {
+      position: fixed;
+      right: 24px;
+      bottom: 24px;
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      border: none;
+      background: #238636;
+      color: #fff;
+      font-size: 32px;
+      line-height: 1;
+      cursor: pointer;
+      box-shadow: 0 4px 16px #0008;
+      transition: transform 0.15s, background 0.15s;
+      z-index: 10;
+    }
+
+    .fab:hover {
+      background: #2ea043;
+      transform: scale(1.05);
+    }
+
+    .fab:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* fullscreen overlay */
+    #overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: #0f1117;
+      z-index: 100;
+      flex-direction: column;
+    }
+
+    #overlay.active { display: flex; }
+
+    .overlay-bar {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 10px 16px;
+      background: #161b22;
+      border-bottom: 1px solid #21262d;
+    }
+
+    .overlay-bar span {
+      display: none;
+    }
+
+    .overlay-actions { display: flex; gap: 8px; }
+
+    .overlay-actions button {
+      background: #21262d;
+      border: 1px solid #30363d;
+      color: #e6edf3;
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    .overlay-actions button:hover { background: #30363d; }
+
+    .overlay-body {
+      flex: 1;
+      display: flex;
+      min-height: 0;
+    }
+
+    .overlay-body iframe {
+      flex: 1;
+      width: 100%;
+      height: 100%;
+      border: none;
+      background: #000;
+    }
+
+    .empty-msg {
+      text-align: center;
+      color: #8b949e;
+    }
+
+    .empty-msg p { margin-top: 8px; font-size: 14px; }
+
+    .toast {
+      position: fixed;
+      bottom: 90px;
+      right: 24px;
+      background: #da3633;
+      color: #fff;
+      padding: 10px 16px;
+      border-radius: 6px;
+      font-size: 13px;
+      display: none;
+      z-index: 200;
+      max-width: 360px;
+    }
+
+    .toast.show { display: block; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Agent Control</h1>
+    <span class="hint">点击标题编辑 · 点击 ⤢ 或双击格子进入 · Esc 退出</span>
+  </header>
+
+  <div id="grid" class="empty">
+    <div class="empty-msg">
+      <div style="font-size:48px;opacity:0.3">+</div>
+      <p>点击右下角加号创建终端 session</p>
+    </div>
+  </div>
+
+  <button class="fab" id="addBtn" title="新建 session">+</button>
+
+  <div id="overlay">
+    <div class="overlay-bar">
+      <textarea id="overlayTitle" class="overlay-title" rows="1" placeholder="点击输入备注..."></textarea>
+      <div class="overlay-actions">
+        <button id="exitBtn">退出 (Esc)</button>
+      </div>
+    </div>
+    <div class="overlay-body"></div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const initialSessions = {{ initial_sessions | tojson }};
+    const fetchOpts = { cache: 'no-store' };
+    const grid = document.getElementById('grid');
+    const addBtn = document.getElementById('addBtn');
+    const overlay = document.getElementById('overlay');
+    const overlayBody = overlay.querySelector('.overlay-body');
+    const overlayTitle = document.getElementById('overlayTitle');
+    const exitBtn = document.getElementById('exitBtn');
+    const toast = document.getElementById('toast');
+
+    let activeView = null;
+
+    function showToast(msg) {
+      toast.textContent = msg;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 4000);
+    }
+
+    function updateEmptyState() {
+      const cells = grid.querySelectorAll('.cell');
+      const emptyMsg = grid.querySelector('.empty-msg');
+      if (cells.length === 0) {
+        grid.classList.add('empty');
+        if (!emptyMsg) {
+          const div = document.createElement('div');
+          div.className = 'empty-msg';
+          div.innerHTML = '<div style="font-size:48px;opacity:0.3">+</div><p>点击右下角加号创建终端 session</p>';
+          grid.appendChild(div);
+        }
+      } else {
+        grid.classList.remove('empty');
+        if (emptyMsg) emptyMsg.remove();
+      }
+    }
+
+    function defaultLabel(session, index) {
+      const title = (session.title || '').trim();
+      const fallback = (session.defaultTitle || '').trim() || `session-${index + 1}`;
+      return title || fallback;
+    }
+
+    function normalizeSession(session, index) {
+      const fallback = (session.defaultTitle || '').trim() || `session-${index + 1}`;
+      session.defaultTitle = fallback;
+      session.title = (session.title || '').trim() || fallback;
+      return session;
+    }
+
+    async function saveSessionTitle(session, rawTitle, sourceEl) {
+      const fallback = session.defaultTitle || 'session-1';
+      const value = (rawTitle || '').trim() || fallback;
+      if (sourceEl) sourceEl.textContent = value;
+      session.title = value;
+
+      const res = await fetch(`/api/sessions/${session.id}`, {
+        ...fetchOpts,
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: value }),
+      });
+      if (!res.ok) {
+        showToast('保存备注失败');
+        return false;
+      }
+
+      const data = await res.json();
+      session.title = data.title || value;
+      session.defaultTitle = data.defaultTitle || session.defaultTitle;
+
+      const cell = grid.querySelector(`.cell[data-id="${session.id}"]`);
+      const cellTitle = cell?.querySelector('.cell-title-display');
+      if (cellTitle && cellTitle !== sourceEl) {
+        cellTitle.textContent = session.title;
+      }
+      if (overlayTitle !== sourceEl && activeView?.session.id === session.id) {
+        overlayTitle.value = session.title;
+      }
+      return true;
+    }
+
+    function attachTitleEditor(session, el) {
+      el.addEventListener('blur', () => saveSessionTitle(session, el.textContent, el));
+      el.addEventListener('keydown', (e) => {
+        e.stopPropagation();
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          el.blur();
+        }
+      });
+      el.addEventListener('click', (e) => e.stopPropagation());
+      el.addEventListener('dblclick', (e) => e.stopPropagation());
+    }
+
+    function openSession(session, cell) {
+      if (activeView) return;
+
+      const iframe = cell.querySelector('iframe');
+      activeView = { session, cell, iframe };
+
+      overlayTitle.value = session.title || session.defaultTitle || 'session';
+      overlay.classList.add('active');
+      cell.classList.add('expanded');
+      overlayBody.appendChild(iframe);
+    }
+
+    function closeOverlay() {
+      if (!activeView) return;
+
+      const { cell, iframe } = activeView;
+      cell.classList.remove('expanded');
+      cell.appendChild(iframe);
+      activeView = null;
+      overlay.classList.remove('active');
+    }
+
+    function createCell(session, index) {
+      normalizeSession(session, index);
+      const label = session.title;
+
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.dataset.id = session.id;
+
+      const header = document.createElement('div');
+      header.className = 'cell-header';
+
+      const titleEl = document.createElement('div');
+      titleEl.className = 'cell-title-display';
+      titleEl.contentEditable = 'true';
+      titleEl.spellcheck = false;
+      titleEl.textContent = label;
+      titleEl.dataset.default = session.defaultTitle;
+      titleEl.title = '点击编辑备注';
+      attachTitleEditor(session, titleEl);
+      header.appendChild(titleEl);
+
+      const actions = document.createElement('div');
+      actions.className = 'cell-actions';
+
+      const maxBtn = document.createElement('button');
+      maxBtn.className = 'btn-icon btn-maximize';
+      maxBtn.title = '最大化';
+      maxBtn.textContent = '⤢';
+      maxBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openSession(session, cell);
+      });
+
+      const closeBtn = document.createElement('button');
+      closeBtn.className = 'btn-icon btn-close';
+      closeBtn.title = '关闭 session';
+      closeBtn.textContent = '×';
+      closeBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const name = session.title || session.defaultTitle || session.id;
+        if (!confirm(`确定关闭 session「${name}」吗？\n终端工作区将被删除。`)) return;
+        if (activeView && activeView.session.id === session.id) closeOverlay();
+        await fetch(`/api/sessions/${session.id}`, { ...fetchOpts, method: 'DELETE' });
+        cell.remove();
+        updateEmptyState();
+      });
+
+      actions.appendChild(maxBtn);
+      actions.appendChild(closeBtn);
+      header.addEventListener('click', (e) => e.stopPropagation());
+      header.addEventListener('dblclick', (e) => e.stopPropagation());
+      header.appendChild(actions);
+
+      const iframe = document.createElement('iframe');
+      iframe.src = session.url;
+      iframe.loading = 'lazy';
+      iframe.setAttribute('allow', 'clipboard-read; clipboard-write');
+
+      cell.appendChild(header);
+      cell.appendChild(iframe);
+
+      cell.addEventListener('dblclick', (e) => {
+        if (e.target.closest('.cell-header')) return;
+        openSession(session, cell);
+      });
+
+      return cell;
+    }
+
+    function renderSessions(list) {
+      grid.querySelectorAll('.cell').forEach((cell) => cell.remove());
+      list.forEach((s, i) => grid.appendChild(createCell(s, i)));
+      updateEmptyState();
+    }
+
+    async function loadSessions() {
+      try {
+        const res = await fetch('/api/sessions', fetchOpts);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const sessions = await res.json();
+        renderSessions(sessions);
+      } catch (err) {
+        console.error('loadSessions failed:', err);
+        if (initialSessions.length && !grid.querySelector('.cell')) {
+          renderSessions(initialSessions);
+        }
+        showToast('加载 session 失败，已使用缓存数据');
+      }
+    }
+
+    overlayTitle.addEventListener('blur', () => {
+      if (!activeView) return;
+      saveSessionTitle(activeView.session, overlayTitle.value, null);
+    });
+    overlayTitle.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        overlayTitle.blur();
+      }
+    });
+    overlayTitle.addEventListener('click', (e) => e.stopPropagation());
+    overlayTitle.addEventListener('dblclick', (e) => e.stopPropagation());
+
+    addBtn.addEventListener('click', async () => {
+      addBtn.disabled = true;
+      try {
+        const res = await fetch('/api/sessions', { ...fetchOpts, method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) {
+          showToast(data.error || '创建 session 失败');
+          return;
+        }
+        grid.appendChild(createCell(data, grid.querySelectorAll('.cell').length));
+        updateEmptyState();
+      } catch (err) {
+        showToast('网络错误: ' + err.message);
+      } finally {
+        addBtn.disabled = false;
+      }
+    });
+
+    exitBtn.addEventListener('click', closeOverlay);
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && overlay.classList.contains('active')) {
+        closeOverlay();
+      }
+    });
+
+    renderSessions(initialSessions);
+    loadSessions();
+  </script>
+</body>
+</html>
