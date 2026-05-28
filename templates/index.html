@@ -214,6 +214,28 @@
 
     .btn-maximize:hover { color: #58a6ff; }
 
+    .btn-drag {
+      font-size: 12px;
+      letter-spacing: -1px;
+      cursor: grab;
+      touch-action: none;
+    }
+
+    .btn-drag:hover { color: #d2a8ff; }
+
+    .btn-drag:active { cursor: grabbing; }
+
+    .cell.dragging {
+      opacity: 0.55;
+      border-color: #d2a8ff;
+      box-shadow: 0 0 0 1px #d2a8ff55;
+    }
+
+    .cell.drag-over {
+      border-color: #d2a8ff;
+      box-shadow: 0 0 0 2px #d2a8ff66;
+    }
+
     .btn-close {
       font-size: 16px;
     }
@@ -447,7 +469,7 @@
 <body>
   <header>
     <h1>Agent Control</h1>
-    <span class="hint">点击标题编辑 · 点击 ⤢ 或双击格子进入 · Esc 退出</span>
+    <span class="hint">点击标题编辑 · 拖动 ⠿ 调整顺序 · 点击 ⤢ 或双击格子进入 · Esc 退出</span>
   </header>
 
   <div id="grid" class="empty">
@@ -588,6 +610,117 @@
       el.addEventListener('dblclick', (e) => e.stopPropagation());
     }
 
+    function gridSessionOrder() {
+      return [...grid.querySelectorAll('.cell')].map((cell) => cell.dataset.id);
+    }
+
+    let orderSaveTimer = null;
+
+    async function persistSessionOrder() {
+      const order = gridSessionOrder();
+      if (!order.length) return;
+      try {
+        const res = await fetch('/api/sessions/order', {
+          ...fetchOpts,
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ order }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          showToast(data.error || '保存排序失败');
+        }
+      } catch (err) {
+        showToast('保存排序失败: ' + err.message);
+      }
+    }
+
+    function schedulePersistSessionOrder() {
+      clearTimeout(orderSaveTimer);
+      orderSaveTimer = setTimeout(persistSessionOrder, 300);
+    }
+
+    function shouldInsertBefore(dragging, target, x, y) {
+      const rect = target.getBoundingClientRect();
+      const midX = rect.left + rect.width / 2;
+      const midY = rect.top + rect.height / 2;
+      const rowThreshold = rect.height * 0.25;
+      if (y < midY - rowThreshold) return true;
+      if (y > midY + rowThreshold) return false;
+      return x < midX;
+    }
+
+    function attachDragReorder(cell) {
+      const handle = cell.querySelector('.btn-drag');
+      if (!handle) return;
+
+      let dragAllowed = false;
+
+      handle.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        dragAllowed = true;
+        handle.setPointerCapture(e.pointerId);
+      });
+
+      handle.addEventListener('pointerup', (e) => {
+        e.stopPropagation();
+        dragAllowed = false;
+        if (handle.hasPointerCapture(e.pointerId)) {
+          handle.releasePointerCapture(e.pointerId);
+        }
+      });
+
+      handle.addEventListener('click', (e) => e.stopPropagation());
+
+      cell.addEventListener('dragstart', (e) => {
+        if (!dragAllowed) {
+          e.preventDefault();
+          return;
+        }
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', cell.dataset.id);
+        cell.classList.add('dragging');
+        if (e.dataTransfer.setDragImage) {
+          e.dataTransfer.setDragImage(cell, 24, 24);
+        }
+      });
+
+      cell.addEventListener('dragend', () => {
+        dragAllowed = false;
+        cell.classList.remove('dragging');
+        grid.querySelectorAll('.cell.drag-over').forEach((el) => el.classList.remove('drag-over'));
+        schedulePersistSessionOrder();
+      });
+
+      cell.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        const dragging = grid.querySelector('.cell.dragging');
+        if (!dragging || dragging === cell) return;
+
+        cell.classList.add('drag-over');
+        const insertBefore = shouldInsertBefore(dragging, cell, e.clientX, e.clientY);
+        if (insertBefore) {
+          if (dragging.nextSibling !== cell) {
+            grid.insertBefore(dragging, cell);
+          }
+        } else if (dragging !== cell.nextSibling) {
+          grid.insertBefore(dragging, cell.nextSibling);
+        }
+      });
+
+      cell.addEventListener('dragleave', () => {
+        cell.classList.remove('drag-over');
+      });
+
+      cell.addEventListener('drop', (e) => {
+        e.preventDefault();
+        cell.classList.remove('drag-over');
+      });
+
+      cell.draggable = true;
+    }
+
     function openSession(session, cell) {
       if (activeView) return;
 
@@ -639,6 +772,12 @@
       const actions = document.createElement('div');
       actions.className = 'cell-actions';
 
+      const dragBtn = document.createElement('button');
+      dragBtn.className = 'btn-icon btn-drag';
+      dragBtn.title = '拖动排序';
+      dragBtn.textContent = '⠿';
+      dragBtn.setAttribute('aria-label', '拖动排序');
+
       const maxBtn = document.createElement('button');
       maxBtn.className = 'btn-icon btn-maximize';
       maxBtn.title = '最大化';
@@ -662,6 +801,7 @@
         updateEmptyState();
       });
 
+      actions.appendChild(dragBtn);
       actions.appendChild(maxBtn);
       actions.appendChild(closeBtn);
       header.appendChild(tmuxEl);
@@ -682,6 +822,7 @@
         openSession(session, cell);
       });
 
+      attachDragReorder(cell);
       return cell;
     }
 

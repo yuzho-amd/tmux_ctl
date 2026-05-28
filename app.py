@@ -457,6 +457,21 @@ def create_session():
     return jsonify(_session_payload(session)), 201
 
 
+@app.route("/api/sessions/order", methods=["PUT"])
+def reorder_sessions():
+    data = request.get_json(silent=True) or {}
+    order = data.get("order")
+    if not isinstance(order, list) or not all(isinstance(item, str) for item in order):
+        return jsonify({"error": "order must be a list of session ids"}), 400
+
+    known_ids = [row["id"] for row in db.list_sessions()]
+    if set(order) != set(known_ids):
+        return jsonify({"error": "order must include each session id exactly once"}), 400
+
+    db.update_session_order(order)
+    return jsonify({"ok": True})
+
+
 @app.route("/api/sessions/<session_id>", methods=["PATCH"])
 def update_session(session_id: str):
     session = _get_session(session_id)
