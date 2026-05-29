@@ -8,6 +8,12 @@ from pathlib import Path
 
 DB_PATH = Path(__file__).parent / "data" / "sessions.db"
 DEFAULT_TITLE_RE = re.compile(r"^session-(\d+)$")
+DEFAULT_CELL_WIDTH = 320
+DEFAULT_CELL_HEIGHT = 240
+MIN_CELL_WIDTH = 260
+MIN_CELL_HEIGHT = 160
+MAX_CELL_WIDTH = 960
+MAX_CELL_HEIGHT = 720
 
 
 def _connect() -> sqlite3.Connection:
@@ -28,6 +34,8 @@ def init_db() -> None:
                 tmux_session TEXT NOT NULL DEFAULT '',
                 port INTEGER NOT NULL,
                 sort_order INTEGER NOT NULL DEFAULT 0,
+                cell_width INTEGER NOT NULL DEFAULT 320,
+                cell_height INTEGER NOT NULL DEFAULT 240,
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
             )
             """
@@ -44,6 +52,14 @@ def init_db() -> None:
         if "sort_order" not in columns:
             conn.execute(
                 "ALTER TABLE sessions ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0"
+            )
+        if "cell_width" not in columns:
+            conn.execute(
+                "ALTER TABLE sessions ADD COLUMN cell_width INTEGER NOT NULL DEFAULT 320"
+            )
+        if "cell_height" not in columns:
+            conn.execute(
+                "ALTER TABLE sessions ADD COLUMN cell_height INTEGER NOT NULL DEFAULT 240"
             )
         conn.execute(
             """
@@ -120,6 +136,18 @@ def next_sort_order() -> int:
     return int(row["n"]) + 1
 
 
+def clamp_cell_size(width: int, height: int) -> tuple[int, int]:
+    width = max(MIN_CELL_WIDTH, min(MAX_CELL_WIDTH, int(width)))
+    height = max(MIN_CELL_HEIGHT, min(MAX_CELL_HEIGHT, int(height)))
+    return width, height
+
+
+def cell_size_for(row: sqlite3.Row) -> tuple[int, int]:
+    width = int(row["cell_width"] or DEFAULT_CELL_WIDTH)
+    height = int(row["cell_height"] or DEFAULT_CELL_HEIGHT)
+    return clamp_cell_size(width, height)
+
+
 def default_tmux_session(session_id: str) -> str:
     return f"agent-{session_id}"
 
@@ -182,7 +210,8 @@ def list_sessions() -> list[sqlite3.Row]:
         _backfill_default_titles(conn)
         cur = conn.execute(
             """
-            SELECT id, title, default_title, tmux_session, port, sort_order, created_at
+            SELECT id, title, default_title, tmux_session, port, sort_order,
+                   cell_width, cell_height, created_at
             FROM sessions
             ORDER BY sort_order ASC, created_at ASC
             """
@@ -194,7 +223,8 @@ def get_session(session_id: str) -> sqlite3.Row | None:
     with _connect() as conn:
         cur = conn.execute(
             """
-            SELECT id, title, default_title, tmux_session, port, sort_order, created_at
+            SELECT id, title, default_title, tmux_session, port, sort_order,
+                   cell_width, cell_height, created_at
             FROM sessions WHERE id = ?
             """,
             (session_id,),
@@ -256,6 +286,15 @@ def update_port(session_id: str, port: int) -> None:
 def delete_session(session_id: str) -> None:
     with _connect() as conn:
         conn.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
+
+
+def update_cell_size(session_id: str, width: int, height: int) -> None:
+    width, height = clamp_cell_size(width, height)
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE sessions SET cell_width = ?, cell_height = ? WHERE id = ?",
+            (width, height, session_id),
+        )
 
 
 def update_session_order(session_ids: list[str]) -> None:

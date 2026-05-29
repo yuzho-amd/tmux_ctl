@@ -299,6 +299,11 @@ def _session_url(port: int) -> str:
 def _session_payload(session: Session) -> dict[str, Any]:
     title = session.title.strip() or session.default_title.strip() or session.id
     default_title = session.default_title.strip() or title
+    row = db.get_session(session.id)
+    width, height = db.cell_size_for(row) if row is not None else (
+        db.DEFAULT_CELL_WIDTH,
+        db.DEFAULT_CELL_HEIGHT,
+    )
     return {
         "id": session.id,
         "port": session.port,
@@ -306,6 +311,8 @@ def _session_payload(session: Session) -> dict[str, Any]:
         "title": title,
         "defaultTitle": default_title,
         "tmuxSession": session.tmux_session or _tmux_session_name(session.id),
+        "width": width,
+        "height": height,
     }
 
 
@@ -479,18 +486,29 @@ def update_session(session_id: str):
         return jsonify({"error": "session not found"}), 404
 
     data = request.get_json(silent=True) or {}
-    if "title" not in data:
-        return jsonify({"error": "title required"}), 400
+    if "title" not in data and "width" not in data and "height" not in data:
+        return jsonify({"error": "title, width, or height required"}), 400
 
-    title = str(data["title"]).strip()
     row = db.get_session(session_id)
     if row is None:
         return jsonify({"error": "session not found"}), 404
-    default_title = db.default_title_for(row)
-    title = title or default_title
-    session.title = title
-    session.default_title = default_title
-    db.update_title(session_id, title)
+
+    if "title" in data:
+        title = str(data["title"]).strip()
+        default_title = db.default_title_for(row)
+        title = title or default_title
+        session.title = title
+        session.default_title = default_title
+        db.update_title(session_id, title)
+
+    if "width" in data or "height" in data:
+        width, height = db.cell_size_for(row)
+        if "width" in data:
+            width = int(data["width"])
+        if "height" in data:
+            height = int(data["height"])
+        db.update_cell_size(session_id, width, height)
+
     return jsonify(_session_payload(session))
 
 
