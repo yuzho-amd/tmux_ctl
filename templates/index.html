@@ -678,7 +678,7 @@
 
   <script>
     const initialSessions = {{ initial_sessions | tojson }};
-    const fetchOpts = { cache: 'no-store' };
+    const fetchOpts = { cache: 'no-store', credentials: 'same-origin' };
     const grid = document.getElementById('grid');
     const addBtn = document.getElementById('addBtn');
     const resetLayoutBtn = document.getElementById('resetLayoutBtn');

@@ -3,8 +3,10 @@
 
 from __future__ import annotations
 
+import argparse
 import atexit
 import os
+import secrets
 import shutil
 import signal
 import socket
@@ -16,7 +18,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, redirect, render_template, request
 
 import db
 
@@ -24,7 +26,51 @@ app = Flask(__name__)
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
 app.jinja_env.auto_reload = True
+AUTH_TOKEN = ""
 db.init_db()
+
+
+def _configure_auth(token: str) -> None:
+    global AUTH_TOKEN
+    AUTH_TOKEN = token.strip()
+    app.config["AUTH_TOKEN"] = AUTH_TOKEN
+
+
+def _request_token() -> str:
+    auth = request.headers.get("Authorization", "")
+    if auth.startswith("Bearer "):
+        return auth[7:].strip()
+    return (
+        request.args.get("token", "").strip()
+        or request.headers.get("X-Agent-Token", "").strip()
+        or request.cookies.get("agent_ctl_token", "").strip()
+    )
+
+
+def _token_valid() -> bool:
+    if not AUTH_TOKEN:
+        return False
+    supplied = _request_token()
+    if not supplied:
+        return False
+    return secrets.compare_digest(supplied, AUTH_TOKEN)
+
+
+def _unauthorized_response():
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "unauthorized"}), 401
+    if request.path != "/login":
+        return redirect("/login")
+    return render_template("login.html", error="")
+
+
+@app.before_request
+def _require_auth():
+    if request.endpoint in ("login", "auth_cookie"):
+        return None
+    if _token_valid():
+        return None
+    return _unauthorized_response()
 
 
 @app.after_request
@@ -397,6 +443,44 @@ def _watch_files() -> list[str]:
     return paths
 
 
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if _token_valid():
+        return redirect("/")
+    error = ""
+    if request.method == "POST":
+        token = (request.form.get("token") or "").strip()
+        if token and secrets.compare_digest(token, AUTH_TOKEN):
+            resp = redirect("/")
+            resp.set_cookie(
+                "agent_ctl_token",
+                token,
+                httponly=True,
+                samesite="Lax",
+                max_age=60 * 60 * 24 * 30,
+            )
+            return resp
+        error = "Token 无效"
+        return render_template("login.html", error=error), 401
+    return render_template("login.html", error="")
+
+
+@app.route("/auth")
+def auth_cookie():
+    token = request.args.get("token", "").strip()
+    if not token or not secrets.compare_digest(token, AUTH_TOKEN):
+        return render_template("login.html", error="Token 无效"), 401
+    resp = redirect("/")
+    resp.set_cookie(
+        "agent_ctl_token",
+        token,
+        httponly=True,
+        samesite="Lax",
+        max_age=60 * 60 * 24 * 30,
+    )
+    return resp
+
+
 @app.route("/")
 def index():
     return render_template(
@@ -535,11 +619,52 @@ def delete_session(session_id: str):
     return jsonify({"ok": True})
 
 
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Agent control terminal grid server")
+    parser.add_argument(
+        "--host",
+        default=os.environ.get("HOST", "0.0.0.0"),
+        help="bind address (default: 0.0.0.0, env HOST)",
+    )
+    parser.add_argument(
+        "-p",
+        "--port",
+        type=int,
+        default=int(os.environ.get("PORT", "5000")),
+        help="listen port (default: 5000, env PORT)",
+    )
+    parser.add_argument(
+        "--token",
+        default=os.environ.get("AGENT_CTL_TOKEN", ""),
+        help="access token (required; env AGENT_CTL_TOKEN)",
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        default=os.environ.get("DEBUG", "1").lower() in ("1", "true", "yes"),
+        help="enable Flask debug mode",
+    )
+    parser.add_argument(
+        "--no-debug",
+        action="store_true",
+        help="disable Flask debug mode",
+    )
+    args = parser.parse_args()
+    if args.no_debug:
+        args.debug = False
+    if not (args.token or "").strip():
+        parser.error("token is required — use --token or set AGENT_CTL_TOKEN")
+    return args
+
+
 if __name__ == "__main__":
-    host = os.environ.get("HOST", "0.0.0.0")
-    port = int(os.environ.get("PORT", "5000"))
-    debug = os.environ.get("DEBUG", "1").lower() in ("1", "true", "yes")
-    print(f"Agent control UI: http://127.0.0.1:{port}")
+    cli = _parse_args()
+    _configure_auth(cli.token)
+    host = cli.host
+    port = cli.port
+    debug = cli.debug
+    print(f"Agent control UI: http://127.0.0.1:{port}/")
+    print("Authentication: token required for all requests")
     if not _find_ttyd():
         print("Warning: ttyd not found — install ttyd before creating sessions.")
     else:

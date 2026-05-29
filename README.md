@@ -1,103 +1,155 @@
 # Agent Control
 
-最简单的群控终端：Flask 提供 Web 界面，每个 session 由 [ttyd](https://github.com/tsl0922/ttyd) 映射为一个格子，底层用 [tmux](https://github.com/tmux/tmux) 持久化终端工作区。
+[中文文档](README.cn.md)
 
-## 架构
+A minimal multi-terminal control panel: Flask serves the web UI; each session is rendered as a grid cell via [ttyd](https://github.com/tsl0922/ttyd); [tmux](https://github.com/tmux/tmux) persists the underlying terminal workspace.
+
+## Architecture
 
 ```
-浏览器格子 (iframe)
+Browser cell (iframe)
     ↓ HTTP / WebSocket
-  ttyd（每个 session 一个端口）
+  ttyd (one port per session)
     ↓
-  tmux session（agent-{id}）
+  tmux session (agent-{id})
     ↓
-  bash / 你跑的程序
+  bash / your workloads
 ```
 
-- **Flask**：Web UI、API、session 管理
-- **SQLite**（`data/sessions.db`）：保存 session 元数据（id、标题、端口）
-- **ttyd**：把终端暴露到浏览器
-- **tmux**：真正持有终端状态（目录、进程、历史）
+- **Flask**: Web UI, API, session management
+- **SQLite** (`data/sessions.db`): Session metadata (id, title, port, sort order, window size, tmux binding)
+- **ttyd**: Exposes terminals to the browser
+- **tmux**: Holds real terminal state (cwd, processes, scrollback)
 
-## 依赖
+## Requirements
 
 - Python 3.10+
-- [ttyd](https://github.com/tsl0922/ttyd)（Web 终端）
-- [tmux](https://github.com/tmux/tmux)（**推荐**，刷新/重启后保留工作区）
+- [ttyd](https://github.com/tsl0922/ttyd) (web terminal)
+- [tmux](https://github.com/tmux/tmux) (**recommended** — workspace survives refresh/restart)
 
-### 安装
+### Install
 
 ```bash
 # Ubuntu / Debian
 sudo apt install ttyd tmux
 
-# 或下载 ttyd 到项目目录（无 sudo 时）
+# Or download ttyd into the project (no sudo)
 bash setup_ttyd.sh
 ```
 
-## 运行
+## Run
 
 ```bash
 pip install -r requirements.txt
-python app.py
+
+# Token is required (CLI or environment variable)
+python app.py --token your-secret-token
+
+# Custom port (default 5000)
+python app.py --token your-secret-token -p 8080
+
+# Or use environment variables
+export AGENT_CTL_TOKEN=your-secret-token
+python app.py -p 5000
 ```
 
-浏览器打开 http://127.0.0.1:5000
+Open http://127.0.0.1:5000 in your browser. On first visit you will see a login page — enter the **token** configured at startup.
 
-## 使用
+One-shot login URL (sets cookie and redirects to home):
 
-1. 点击右下角 **+** 创建 session（默认名 `session-1`、`session-2`…）
-2. 点击标题可编辑备注（存 SQLite）
-3. 多个 session 自动矩阵排列
-4. **双击** 格子进入全屏，**Esc** 退出
-5. 格子右上角 **×** 关闭 session（同时结束对应 tmux）
+```
+http://127.0.0.1:5000/auth?token=your-secret-token
+```
 
-## tmux 联动原理
+### CLI flags
 
-每个 session 创建时，后端启动的命令是：
+| Flag | Environment | Default | Description |
+|------|-------------|---------|-------------|
+| `--token` | `AGENT_CTL_TOKEN` | (required) | Access token; server refuses to start without it |
+| `-p` / `--port` | `PORT` | `5000` | Flask listen port |
+| `--host` | `HOST` | `0.0.0.0` | Bind address |
+| `--debug` | `DEBUG=1` | on | Flask debug / auto-reload |
+| `--no-debug` | — | — | Disable debug mode |
+
+## Authentication
+
+A token **must** be set at startup. All web pages and `/api/*` endpoints are protected; unauthorized requests are rejected.
+
+| Method | Description |
+|--------|-------------|
+| Login page | Visit `/` → redirect to `/login`; valid token is stored in an HttpOnly cookie |
+| URL | `GET /auth?token=...` validates and sets cookie |
+| Headers | `Authorization: Bearer <token>` or `X-Agent-Token: <token>` |
+| API | Missing/invalid token → `401` |
+
+> Note: ttyd terminal iframes connect directly to their own ports (7681+), not through Flask auth. The control UI and API are token-protected.
+
+## Usage
+
+1. Click **+** (bottom-right) to create a session (optionally reuse an existing tmux session or create a new one)
+2. Click a title to edit the label (saved in SQLite)
+3. Drag **⠿** to reorder cells; drag the **bottom-right corner** to resize (flex flow layout)
+4. Click **⤢** to maximize; **Esc** or **Minimize** returns to the grid; after minimize, click **Repaint** on the terminal overlay to keep editing in the small window
+5. **Reset windows** (header) restores all cells to the default size (320×240)
+6. Click **×** on a cell to close the session (also kills the tmux session unless another cell reuses it)
+
+## How tmux integration works
+
+When a session is created, the backend runs:
 
 ```bash
 ttyd -p <port> -W -I ttyd/index.html \
   tmux new-session -A -s agent-<session_id>
 ```
 
-含义：
+| Piece | Role |
+|-------|------|
+| `tmux new-session -A -s agent-xxx` | **Attach** if the tmux session exists, otherwise **create** |
+| `agent-<session_id>` | Matches the SQLite session id for recovery |
+| ttyd | Web display only; can be restarted and re-attach to the same tmux |
 
-| 部分 | 作用 |
-|------|------|
-| `tmux new-session -A -s agent-xxx` | 若 tmux 会话已存在则 **attach**，否则 **新建** |
-| `agent-<session_id>` | 与 SQLite 里的 session id 一一对应，保证可恢复 |
-| ttyd | 仅负责 Web 展示；挂了可以再起，重新 attach 同一个 tmux |
+Behavior:
 
-因此：
+- **Browser refresh**: iframe reconnects to ttyd → same tmux → workspace preserved
+- **Flask restart**: sessions restored from SQLite, ttyd respawned, tmux re-attached → workspace preserved
+- **Close session (×)**: stops ttyd and runs `tmux kill-session -t agent-xxx` → full cleanup
 
-- **刷新浏览器**：iframe 重连 ttyd，ttyd 仍 attach 同一个 tmux → 工作区不丢
-- **重启 Flask 服务器**：从 SQLite 恢复 session 列表，重新拉起 ttyd，再 attach 已有 tmux → 工作区不丢
-- **关闭 session（×）**：停止 ttyd，并执行 `tmux kill-session -t agent-xxx` → 彻底清理
+Without tmux, the command falls back to plain `bash`; terminal state is **not** preserved across refresh/restart.
 
-若系统未安装 tmux，会回退为 `bash`，刷新/重启后终端状态**不会**保留。
-
-### 手动查看 tmux 会话
+### Inspect tmux manually
 
 ```bash
-tmux ls                  # 列出所有 agent-* 会话
-tmux attach -t agent-xxx # 在本地终端 attach 同一个 session
+tmux ls                  # list agent-* sessions
+tmux attach -t agent-xxx # attach the same session locally
 ```
 
-## 持久化说明
+## Persistence
 
-| 内容 | 刷新页面 | 重启服务器 | 关闭 session |
-|------|----------|------------|--------------|
-| 格子 / 标题 | ✅ SQLite | ✅ SQLite | ❌ 删除 |
-| 终端工作区（tmux） | ✅ | ✅ | ❌ kill tmux |
-| ttyd 进程 | 重连即可 | 自动重建 | 停止 |
+| Data | Page refresh | Server restart | Close session |
+|------|--------------|----------------|---------------|
+| Grid / titles | ✅ SQLite | ✅ SQLite | ❌ deleted |
+| Terminal workspace (tmux) | ✅ | ✅ | ❌ tmux killed |
+| ttyd process | reconnect | auto respawn | stopped |
 
-## 环境变量
+## Environment variables
 
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| `HOST` | `0.0.0.0` | Flask 监听地址 |
-| `PORT` | `5000` | Flask 端口 |
-| `DEBUG` | `1` | 调试模式（改代码自动重载） |
-| `TTYD_BASE_PORT` | `7681` | ttyd 起始端口 |
-| `TTYD_BIN` | 自动查找 | ttyd 可执行文件路径 |
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AGENT_CTL_TOKEN` | (required) | Access token; can also pass `--token` |
+| `HOST` | `0.0.0.0` | Flask bind address |
+| `PORT` | `5000` | Flask port |
+| `DEBUG` | `1` | Debug mode (auto-reload on code changes) |
+| `TTYD_BASE_PORT` | `7681` | First ttyd port |
+| `TTYD_BIN` | auto-detect | Path to ttyd binary |
+
+## API overview
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/sessions` | List sessions |
+| `POST` | `/api/sessions` | Create (optional `{ "tmuxSession": "..." }` to reuse tmux) |
+| `PATCH` | `/api/sessions/<id>` | Update title or size `{ "width", "height" }` |
+| `DELETE` | `/api/sessions/<id>` | Delete session |
+| `PUT` | `/api/sessions/order` | Reorder `{ "order": ["id", ...] }` |
+| `POST` | `/api/sessions/reset-layout` | Reset all cells to default size |
+| `GET` | `/api/tmux/sessions` | List tmux sessions available for reuse |
