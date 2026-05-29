@@ -94,7 +94,7 @@
       border-radius: 8px;
       overflow: hidden;
       aspect-ratio: 4 / 3;
-      cursor: pointer;
+      cursor: default;
       transition: border-color 0.15s, box-shadow 0.15s;
     }
 
@@ -242,16 +242,101 @@
 
     .btn-close:hover { color: #f85149; }
 
-    .cell iframe {
+    .terminal-viewport {
       flex: 1;
       min-height: 0;
-      width: 100%;
-      border: none;
+      overflow: hidden;
+      position: relative;
       background: #000;
+    }
+
+    .terminal-frame {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      transform-origin: top left;
+    }
+
+    .terminal-frame iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      display: block;
+      background: #000;
+      pointer-events: auto;
+    }
+
+    .cell.minimized .terminal-frame iframe {
       pointer-events: none;
     }
 
-    .cell:hover iframe {
+    .cell.minimized-active .terminal-frame iframe {
+      pointer-events: auto;
+    }
+
+    .terminal-activator {
+      display: none;
+      position: absolute;
+      inset: 0;
+      z-index: 4;
+      border: none;
+      padding: 0;
+      background: rgba(0, 0, 0, 0.5);
+      color: #8b949e;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .cell.minimized:not(.minimized-active) .terminal-activator {
+      display: block;
+    }
+
+    body.session-expanded {
+      overflow: hidden;
+    }
+
+    .cell-placeholder {
+      aspect-ratio: 4 / 3;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .cell.expanded {
+      position: fixed;
+      top: var(--overlay-bar-height, 49px);
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 90;
+      aspect-ratio: unset;
+      height: auto;
+      border-radius: 0;
+      border: none;
+      cursor: default;
+    }
+
+    .cell.expanded:hover {
+      border-color: transparent;
+      box-shadow: none;
+    }
+
+    .cell.expanded .cell-header {
+      display: none;
+    }
+
+    .cell.expanded .terminal-viewport {
+      flex: 1;
+    }
+
+    .cell.expanded .terminal-frame {
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+
+    .cell.expanded .terminal-frame iframe {
       pointer-events: auto;
     }
 
@@ -284,17 +369,18 @@
       transform: none;
     }
 
-    /* fullscreen overlay */
+    /* fullscreen overlay — bar only; iframe stays in its cell */
     #overlay {
       display: none;
       position: fixed;
-      inset: 0;
-      background: #0f1117;
+      top: 0;
+      left: 0;
+      right: 0;
       z-index: 100;
-      flex-direction: column;
+      pointer-events: none;
     }
 
-    #overlay.active { display: flex; }
+    #overlay.active { display: block; }
 
     .overlay-bar {
       display: flex;
@@ -303,6 +389,7 @@
       padding: 10px 16px;
       background: #161b22;
       border-bottom: 1px solid #21262d;
+      pointer-events: auto;
     }
 
     .overlay-bar span {
@@ -323,19 +410,7 @@
 
     .overlay-actions button:hover { background: #30363d; }
 
-    .overlay-body {
-      flex: 1;
-      display: flex;
-      min-height: 0;
-    }
-
-    .overlay-body iframe {
-      flex: 1;
-      width: 100%;
-      height: 100%;
-      border: none;
-      background: #000;
-    }
+    .overlay-body { display: none; }
 
     .empty-msg {
       text-align: center;
@@ -469,7 +544,7 @@
 <body>
   <header>
     <h1>Agent Control</h1>
-    <span class="hint">点击标题编辑 · 拖动 ⠿ 调整顺序 · 点击 ⤢ 或双击格子进入 · Esc 退出</span>
+    <span class="hint">点击标题编辑 · 拖动 ⠿ 调整顺序 · 最小化后点击终端重绘 · 仅 ⤢ 放大</span>
   </header>
 
   <div id="grid" class="empty">
@@ -485,7 +560,7 @@
     <div class="overlay-bar">
       <textarea id="overlayTitle" class="overlay-title" rows="1" placeholder="点击输入备注..."></textarea>
       <div class="overlay-actions">
-        <button id="exitBtn">退出 (Esc)</button>
+        <button id="exitBtn">最小化 (Esc)</button>
       </div>
     </div>
     <div class="overlay-body"></div>
@@ -518,7 +593,6 @@
     const grid = document.getElementById('grid');
     const addBtn = document.getElementById('addBtn');
     const overlay = document.getElementById('overlay');
-    const overlayBody = overlay.querySelector('.overlay-body');
     const overlayTitle = document.getElementById('overlayTitle');
     const exitBtn = document.getElementById('exitBtn');
     const toast = document.getElementById('toast');
@@ -721,26 +795,135 @@
       cell.draggable = true;
     }
 
-    function openSession(session, cell) {
-      if (activeView) return;
+    const OVERLAY_BAR_HEIGHT = 49;
+
+    function getExpandedTerminalSize() {
+      return {
+        width: window.innerWidth,
+        height: Math.max(200, window.innerHeight - OVERLAY_BAR_HEIGHT),
+      };
+    }
+
+    function ensureTerminalFrame(cell) {
+      let viewport = cell.querySelector('.terminal-viewport');
+      if (viewport) {
+        return {
+          viewport,
+          frame: viewport.querySelector('.terminal-frame'),
+          iframe: viewport.querySelector('iframe'),
+        };
+      }
 
       const iframe = cell.querySelector('iframe');
-      activeView = { session, cell, iframe };
+      viewport = document.createElement('div');
+      viewport.className = 'terminal-viewport';
+      const frame = document.createElement('div');
+      frame.className = 'terminal-frame';
+      if (iframe) {
+        frame.appendChild(iframe);
+      } else {
+        const created = document.createElement('iframe');
+        frame.appendChild(created);
+      }
+      viewport.appendChild(frame);
+      cell.appendChild(viewport);
+      return {
+        viewport,
+        frame,
+        iframe: frame.querySelector('iframe'),
+      };
+    }
+
+    function readExpandedSize(frame) {
+      const width = parseInt(frame.dataset.expandedWidth || '', 10);
+      const height = parseInt(frame.dataset.expandedHeight || '', 10);
+      if (!width || !height) return null;
+      return { width, height };
+    }
+
+    function rememberExpandedSize(frame, width, height) {
+      frame.dataset.expandedWidth = String(width);
+      frame.dataset.expandedHeight = String(height);
+    }
+
+    function setFrameSize(frame, width, height) {
+      frame.style.width = `${width}px`;
+      frame.style.height = `${height}px`;
+    }
+
+    function fitFrameToGrid(cell) {
+      const { viewport, frame } = ensureTerminalFrame(cell);
+      const width = Math.max(1, viewport.clientWidth);
+      const height = Math.max(1, viewport.clientHeight);
+      setFrameSize(frame, width, height);
+      frame.style.transform = 'none';
+    }
+
+    function expandTerminalFrame(cell) {
+      const { frame } = ensureTerminalFrame(cell);
+      let size = readExpandedSize(frame);
+      if (!size) {
+        size = getExpandedTerminalSize();
+        rememberExpandedSize(frame, size.width, size.height);
+      }
+      setFrameSize(frame, size.width, size.height);
+      frame.style.transform = 'none';
+      cell.classList.remove('minimized');
+    }
+
+    function repaintMinimizedTerminal(cell) {
+      fitFrameToGrid(cell);
+      cell.classList.add('minimized-active');
+      requestAnimationFrame(() => {
+        fitFrameToGrid(cell);
+        const { iframe } = ensureTerminalFrame(cell);
+        iframe.focus();
+      });
+    }
+
+    function minimizeSession(view = activeView) {
+      if (!view) return;
+
+      const { cell, placeholder } = view;
+      cell.classList.remove('expanded');
+      cell.classList.remove('minimized-active');
+      placeholder?.remove();
+      activeView = null;
+      overlay.classList.remove('active');
+      document.body.classList.remove('session-expanded');
+
+      requestAnimationFrame(() => {
+        fitFrameToGrid(cell);
+        cell.classList.add('minimized');
+      });
+    }
+
+    function openSession(session, cell) {
+      if (activeView?.cell === cell) return;
+
+      if (activeView) {
+        minimizeSession(activeView);
+      }
+
+      expandTerminalFrame(cell);
+      cell.classList.remove('minimized');
+      cell.classList.remove('minimized-active');
+
+      const placeholder = document.createElement('div');
+      placeholder.className = 'cell-placeholder';
+      placeholder.setAttribute('aria-hidden', 'true');
+      cell.parentNode.insertBefore(placeholder, cell);
+
+      activeView = { session, cell, placeholder };
 
       overlayTitle.value = session.title || session.defaultTitle || 'session';
       overlay.classList.add('active');
+      document.body.classList.add('session-expanded');
       cell.classList.add('expanded');
-      overlayBody.appendChild(iframe);
     }
 
     function closeOverlay() {
-      if (!activeView) return;
-
-      const { cell, iframe } = activeView;
-      cell.classList.remove('expanded');
-      cell.appendChild(iframe);
-      activeView = null;
-      overlay.classList.remove('active');
+      minimizeSession();
     }
 
     function createCell(session, index) {
@@ -780,7 +963,7 @@
 
       const maxBtn = document.createElement('button');
       maxBtn.className = 'btn-icon btn-maximize';
-      maxBtn.title = '最大化';
+      maxBtn.title = '放大';
       maxBtn.textContent = '⤢';
       maxBtn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -795,7 +978,7 @@
         e.stopPropagation();
         const name = session.title || session.defaultTitle || session.id;
         if (!confirm(`确定关闭 session「${name}」吗？\n终端工作区将被删除。`)) return;
-        if (activeView && activeView.session.id === session.id) closeOverlay();
+        if (activeView && activeView.session.id === session.id) minimizeSession();
         await fetch(`/api/sessions/${session.id}`, { ...fetchOpts, method: 'DELETE' });
         cell.remove();
         updateEmptyState();
@@ -809,18 +992,32 @@
       header.addEventListener('dblclick', (e) => e.stopPropagation());
       header.appendChild(actions);
 
+      const viewport = document.createElement('div');
+      viewport.className = 'terminal-viewport';
+      const frame = document.createElement('div');
+      frame.className = 'terminal-frame';
       const iframe = document.createElement('iframe');
       iframe.src = session.url;
-      iframe.loading = 'lazy';
       iframe.setAttribute('allow', 'clipboard-read; clipboard-write');
+      frame.appendChild(iframe);
+      viewport.appendChild(frame);
+
+      const activator = document.createElement('button');
+      activator.type = 'button';
+      activator.className = 'terminal-activator';
+      activator.textContent = '点击重绘以编辑';
+      activator.title = '在小窗口重绘终端（不放大）';
+      activator.addEventListener('mousedown', (e) => e.stopPropagation());
+      activator.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!cell.classList.contains('minimized')) return;
+        repaintMinimizedTerminal(cell);
+      });
+      viewport.appendChild(activator);
 
       cell.appendChild(header);
-      cell.appendChild(iframe);
-
-      cell.addEventListener('dblclick', (e) => {
-        if (e.target.closest('.cell-header')) return;
-        openSession(session, cell);
-      });
+      cell.appendChild(viewport);
 
       attachDragReorder(cell);
       return cell;
@@ -849,7 +1046,10 @@
 
     overlayTitle.addEventListener('blur', () => {
       if (!activeView) return;
-      saveSessionTitle(activeView.session, overlayTitle.value, null);
+      const value = overlayTitle.value.trim();
+      const current = (activeView.session.title || activeView.session.defaultTitle || '').trim();
+      if (value === current) return;
+      saveSessionTitle(activeView.session, value, null);
     });
     overlayTitle.addEventListener('keydown', (e) => {
       e.stopPropagation();
