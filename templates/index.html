@@ -56,9 +56,43 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 16px;
       padding: 12px 20px;
       border-bottom: 1px solid #21262d;
       background: #161b22;
+    }
+
+    .header-main {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      min-width: 0;
+      flex: 1;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .header-btn {
+      background: #21262d;
+      border: 1px solid #30363d;
+      color: #e6edf3;
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .header-btn:hover { background: #30363d; }
+
+    .header-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
     }
 
     header h1 {
@@ -593,8 +627,13 @@
 </head>
 <body>
   <header>
-    <h1>Agent Control</h1>
-    <span class="hint">拖动 ⠿ 排序 · 右下角拖大窗口 · ⤢ 放大 · Esc 最小化</span>
+    <div class="header-main">
+      <h1>Agent Control</h1>
+      <span class="hint">拖动 ⠿ 排序 · 右下角拖大窗口 · ⤢ 放大 · Esc 最小化</span>
+    </div>
+    <div class="header-actions">
+      <button type="button" class="header-btn" id="resetLayoutBtn" title="所有窗口恢复默认大小">重置窗口</button>
+    </div>
   </header>
 
   <div id="grid" class="empty">
@@ -642,6 +681,7 @@
     const fetchOpts = { cache: 'no-store' };
     const grid = document.getElementById('grid');
     const addBtn = document.getElementById('addBtn');
+    const resetLayoutBtn = document.getElementById('resetLayoutBtn');
     const overlay = document.getElementById('overlay');
     const overlayTitle = document.getElementById('overlayTitle');
     const exitBtn = document.getElementById('exitBtn');
@@ -1209,6 +1249,27 @@
       }
     }
 
+    async function resetAllLayouts() {
+      if (activeView) {
+        minimizeSession();
+      }
+      resetLayoutBtn.disabled = true;
+      try {
+        const res = await fetch('/api/sessions/reset-layout', { ...fetchOpts, method: 'POST' });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          showToast(data.error || '重置窗口失败');
+          return;
+        }
+        const sessions = await res.json();
+        renderSessions(sessions);
+      } catch (err) {
+        showToast('重置窗口失败: ' + err.message);
+      } finally {
+        resetLayoutBtn.disabled = false;
+      }
+    }
+
     overlayTitle.addEventListener('blur', () => {
       if (!activeView) return;
       const value = overlayTitle.value.trim();
@@ -1336,6 +1397,7 @@
     });
 
     exitBtn.addEventListener('click', closeOverlay);
+    resetLayoutBtn.addEventListener('click', resetAllLayouts);
 
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && overlay.classList.contains('active')) {

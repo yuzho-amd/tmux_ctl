@@ -297,6 +297,14 @@ def update_cell_size(session_id: str, width: int, height: int) -> None:
         )
 
 
+def reset_all_cell_sizes() -> None:
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE sessions SET cell_width = ?, cell_height = ?",
+            (DEFAULT_CELL_WIDTH, DEFAULT_CELL_HEIGHT),
+        )
+
+
 def update_session_order(session_ids: list[str]) -> None:
     with _connect() as conn:
         for index, session_id in enumerate(session_ids):

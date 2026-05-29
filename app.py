@@ -479,6 +479,13 @@ def reorder_sessions():
     return jsonify({"ok": True})
 
 
+@app.route("/api/sessions/reset-layout", methods=["POST"])
+def reset_session_layout():
+    _ensure_sessions()
+    db.reset_all_cell_sizes()
+    return jsonify(_ordered_session_payloads())
+
+
 @app.route("/api/sessions/<session_id>", methods=["PATCH"])
 def update_session(session_id: str):
     session = _get_session(session_id)
