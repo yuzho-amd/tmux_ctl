@@ -1,4 +1,4 @@
-# TMUX Ctl
+# TMUX CTL
 
 [中文文档](README.cn.md)
 
