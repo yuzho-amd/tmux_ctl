@@ -1,8 +1,25 @@
-# Agent Control
+# TMUX Ctl
 
 [中文文档](README.cn.md)
 
 A minimal multi-terminal web control panel.
+
+![TMUX Ctl](images/image.jpg)
+
+## Why TMUX Ctl?
+
+Running one AI coding agent in a terminal is easy. Running ten of them is chaos.
+
+The moment you start letting agents work in parallel — one fixing a bug, another writing tests, a third refactoring a module — you lose the ability to see what's happening. You end up juggling terminal tabs, SSH sessions, and tmux panes, constantly switching back and forth just to check "is it still working? is it stuck? did it finish?".
+
+**TMUX Ctl gives you a single screen for all of them.** Every agent lives in its own live terminal cell, laid out as a grid in your browser. At a glance you can see which agents are making progress, which are waiting on you, and which need a nudge — without losing the full, interactive terminal for any of them.
+
+- **See everything at once** — every running agent on one dashboard, no tab-hopping.
+- **Stay in control** — each cell is a real, fully interactive terminal; jump in and type whenever you need to.
+- **Nothing gets lost** — sessions live in tmux, so a refresh or restart never kills your work.
+- **Reach it from anywhere** — it's just a web page, so you can monitor your agents from your laptop, tablet, or phone.
+
+If you supervise multiple agents — or just want a tidy command center for several long-running terminals — this turns the mess into one calm, glanceable view.
 
 ## Requirements
 

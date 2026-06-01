@@ -84,6 +84,7 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 TTYD_DIR = os.path.join(ROOT, "ttyd")
 TTYD_INDEX = os.path.join(TTYD_DIR, "index.html")
 TTYD_SCROLLBAR_CSS = os.path.join(TTYD_DIR, "scrollbar.css")
+TTYD_KEYHOOKS_JS = os.path.join(TTYD_DIR, "keyhooks.js")
 
 BASE_PORT = int(os.environ.get("TTYD_BASE_PORT", "7681"))
 TTYD_BIN = os.environ.get("TTYD_BIN", shutil.which("ttyd") or "")
@@ -383,6 +384,19 @@ def _scrollbar_css() -> str:
         return fh.read()
 
 
+def _keyhooks_js() -> str:
+    with open(TTYD_KEYHOOKS_JS, encoding="utf-8") as fh:
+        return fh.read()
+
+
+def _ttyd_patch_mtime() -> float:
+    mtimes = []
+    for path in (TTYD_SCROLLBAR_CSS, TTYD_KEYHOOKS_JS):
+        if os.path.isfile(path):
+            mtimes.append(os.path.getmtime(path))
+    return max(mtimes) if mtimes else 0.0
+
+
 def _fetch_default_ttyd_html(ttyd: str) -> str:
     port = BASE_PORT
     while not _port_free(port):
@@ -408,16 +422,21 @@ def _fetch_default_ttyd_html(ttyd: str) -> str:
 
 def _ensure_ttyd_index(ttyd: str) -> str:
     os.makedirs(TTYD_DIR, exist_ok=True)
-    css_mtime = os.path.getmtime(TTYD_SCROLLBAR_CSS)
-    if os.path.isfile(TTYD_INDEX) and os.path.getmtime(TTYD_INDEX) >= css_mtime:
+    patch_mtime = _ttyd_patch_mtime()
+    if os.path.isfile(TTYD_INDEX) and os.path.getmtime(TTYD_INDEX) >= patch_mtime:
         return TTYD_INDEX
 
     html = _fetch_default_ttyd_html(ttyd)
     css_block = f"<style>\n{_scrollbar_css()}\n</style>"
+    js_block = f"<script>\n{_keyhooks_js()}\n</script>"
     if "</head>" in html:
         html = html.replace("</head>", css_block + "\n</head>", 1)
     else:
         html = css_block + html
+    if "</body>" in html:
+        html = html.replace("</body>", js_block + "\n</body>", 1)
+    else:
+        html = html + js_block
 
     with open(TTYD_INDEX, "w", encoding="utf-8") as fh:
         fh.write(html)
@@ -440,6 +459,8 @@ def _watch_files() -> list[str]:
                 paths.append(path)
     if os.path.isfile(TTYD_SCROLLBAR_CSS):
         paths.append(TTYD_SCROLLBAR_CSS)
+    if os.path.isfile(TTYD_KEYHOOKS_JS):
+        paths.append(TTYD_KEYHOOKS_JS)
     return paths
 
 
