@@ -624,40 +624,6 @@
       cursor: not-allowed;
     }
 
-    .modal.wide {
-      width: min(720px, 100%);
-      max-height: min(85vh, 800px);
-      display: flex;
-      flex-direction: column;
-    }
-
-    .modal.wide .modal-body {
-      flex: 1;
-      min-height: 0;
-      overflow: auto;
-      padding-top: 4px;
-    }
-
-    .summary-meta {
-      font-size: 12px;
-      color: #8b949e;
-      margin-bottom: 12px;
-    }
-
-    .summary-content {
-      white-space: pre-wrap;
-      font-size: 13px;
-      line-height: 1.55;
-      color: #e6edf3;
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    }
-
-    .summary-loading {
-      color: #8b949e;
-      font-size: 13px;
-      padding: 8px 0;
-    }
-
     /* --- Mobile layout --- */
     .mobile-only { display: none; }
 
@@ -986,7 +952,6 @@
     </div>
     <div class="header-actions">
       <button type="button" class="header-btn mobile-only" id="mobileOverviewBtn" title="返回总览">总览</button>
-      <button type="button" class="header-btn" id="summarizeBtn" title="抓取所有 tmux 终端并由 AI 汇总状态">AI 汇总</button>
       <button type="button" class="header-btn" id="resetLayoutBtn" title="所有窗口恢复默认大小">重置窗口</button>
     </div>
   </header>
@@ -1031,20 +996,6 @@
 
   <div class="toast" id="toast"></div>
 
-  <div class="modal-backdrop" id="summaryModal">
-    <div class="modal wide" role="dialog" aria-labelledby="summaryModalTitle">
-      <div class="modal-header" id="summaryModalTitle">全 Session 状态汇总</div>
-      <div class="modal-body">
-        <div class="summary-meta" id="summaryMeta"></div>
-        <div class="summary-content" id="summaryContent"></div>
-      </div>
-      <div class="modal-actions">
-        <button type="button" id="summaryCloseBtn">关闭</button>
-        <button type="button" class="primary" id="summaryRefreshBtn">重新汇总</button>
-      </div>
-    </div>
-  </div>
-
   <div class="modal-backdrop" id="createModal">
     <div class="modal" role="dialog" aria-labelledby="createModalTitle">
       <div class="modal-header" id="createModalTitle">新建 session</div>
@@ -1070,12 +1021,6 @@
     const grid = document.getElementById('grid');
     const addBtn = document.getElementById('addBtn');
     const resetLayoutBtn = document.getElementById('resetLayoutBtn');
-    const summarizeBtn = document.getElementById('summarizeBtn');
-    const summaryModal = document.getElementById('summaryModal');
-    const summaryMeta = document.getElementById('summaryMeta');
-    const summaryContent = document.getElementById('summaryContent');
-    const summaryCloseBtn = document.getElementById('summaryCloseBtn');
-    const summaryRefreshBtn = document.getElementById('summaryRefreshBtn');
     const overlay = document.getElementById('overlay');
     const overlayTitle = document.getElementById('overlayTitle');
     const exitBtn = document.getElementById('exitBtn');
@@ -2085,58 +2030,6 @@
       }
     }
 
-    let summarizeInFlight = false;
-
-    function openSummaryModal() {
-      summaryModal.classList.add('active');
-    }
-
-    function closeSummaryModal() {
-      summaryModal.classList.remove('active');
-    }
-
-    async function runSummarize() {
-      if (summarizeInFlight) return;
-      summarizeInFlight = true;
-      summarizeBtn.disabled = true;
-      summaryRefreshBtn.disabled = true;
-      openSummaryModal();
-      summaryMeta.textContent = '正在抓取所有 tmux 终端并请求 AI 汇总…';
-      summaryContent.innerHTML = '<div class="summary-loading">请稍候，这可能需要十几秒。</div>';
-      try {
-        const res = await fetch('/api/summarize', {
-          ...fetchOpts,
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ lines: 500 }),
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          throw new Error(data.error || `HTTP ${res.status}`);
-        }
-        const n = (data.captures || []).length;
-        const lines = data.lines ?? 500;
-        summaryMeta.textContent = `已汇总 ${n} 个 session（每个最多 ${lines} 行 scrollback）`;
-        summaryContent.textContent = data.summary || '(无内容)';
-      } catch (err) {
-        console.error('summarize failed:', err);
-        summaryMeta.textContent = '汇总失败';
-        summaryContent.textContent = String(err.message || err);
-        showToast('汇总失败：' + (err.message || err));
-      } finally {
-        summarizeInFlight = false;
-        summarizeBtn.disabled = false;
-        summaryRefreshBtn.disabled = false;
-      }
-    }
-
-    summarizeBtn.addEventListener('click', runSummarize);
-    summaryRefreshBtn.addEventListener('click', runSummarize);
-    summaryCloseBtn.addEventListener('click', closeSummaryModal);
-    summaryModal.addEventListener('click', (e) => {
-      if (e.target === summaryModal) closeSummaryModal();
-    });
-
     createCancelBtn.addEventListener('click', closeCreateModal);
     createModal.addEventListener('click', (e) => {
       if (e.target === createModal) closeCreateModal();
@@ -2146,12 +2039,7 @@
     });
 
     document.addEventListener('keydown', (e) => {
-      if (e.key !== 'Escape') return;
-      if (summaryModal.classList.contains('active')) {
-        closeSummaryModal();
-        return;
-      }
-      if (createModal.classList.contains('active')) {
+      if (e.key === 'Escape' && createModal.classList.contains('active')) {
         closeCreateModal();
       }
     });

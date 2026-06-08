@@ -81,11 +81,6 @@ http://127.0.0.1:5000/auth?token=your-secret-token
 | `DEBUG` | `1` | Debug mode (auto-reload on code changes) |
 | `TTYD_BASE_PORT` | `7681` | First ttyd port |
 | `TTYD_BIN` | auto-detect | Path to ttyd binary |
-| `OPENAI_API_KEY` | — | Required for **AI summary** (OpenAI or compatible API) |
-| `OPENAI_BASE_URL` | `https://api.openai.com/v1` | Compatible API base URL |
-| `SUMMARIZE_MODEL` | `gpt-4o-mini` | Model used for summarization |
-| `SUMMARIZE_MAX_CHARS_PER_SESSION` | `12000` | Max characters per session sent to the model |
-| `SUMMARIZE_TIMEOUT` | `120` | LLM request timeout (seconds) |
 
 ## Authentication
 
@@ -101,20 +96,5 @@ http://127.0.0.1:5000/auth?token=your-secret-token
 2. Click a title to edit the label
 3. Drag **⠿** to reorder cells; drag the **bottom-right corner** to resize
 4. Click **⤢** to maximize; **Esc** or **Minimize** returns to the grid
-5. **AI summary** (header) captures all tmux scrollback and produces a status report — no need to open each cell
-6. **Reset windows** (header) restores all cells to the default size
-7. Click **×** on a cell to close the session
-
-### AI summary
-
-1. Set `OPENAI_API_KEY` (and optionally `OPENAI_BASE_URL`, `SUMMARIZE_MODEL`) before starting
-2. Click **AI summary** in the header, or call the API:
-
-```bash
-curl -s -X POST http://127.0.0.1:5000/api/summarize \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"lines": 500}'
-```
-
-Raw capture only (no LLM): `GET /api/sessions/capture?lines=500`
+5. **Reset windows** (header) restores all cells to the default size
+6. Click **×** on a cell to close the session
