@@ -665,9 +665,9 @@
       align-items: center;
       justify-content: space-between;
       gap: 12px;
-      padding: 8px 16px max(8px, env(safe-area-inset-bottom));
+      padding: 10px 16px max(10px, env(safe-area-inset-bottom));
       border-top: 1px solid #21262d;
-      min-height: 72px;
+      min-height: 52px;
     }
 
     .mobile-pager-back {
@@ -737,22 +737,44 @@
       text-align: center;
     }
 
-    .mobile-pager-center {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 4px;
-      min-width: 0;
+    .mobile-pager-settings {
+      flex-shrink: 0;
+      background: #21262d;
+      border: 1px solid #30363d;
+      color: #e6edf3;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
     }
 
-    .mobile-font-controls {
+    .settings-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .settings-row-label {
+      font-size: 13px;
+      color: #e6edf3;
+    }
+
+    .settings-row-hint {
+      margin-top: 8px;
+      font-size: 12px;
+      color: #8b949e;
+      line-height: 1.5;
+    }
+
+    .font-size-controls {
       display: flex;
       align-items: center;
       gap: 6px;
     }
 
-    .mobile-font-btn {
+    .font-size-btn {
       background: #21262d;
       border: 1px solid #30363d;
       color: #e6edf3;
@@ -766,13 +788,13 @@
       cursor: pointer;
     }
 
-    .mobile-font-btn:disabled {
+    .font-size-btn:disabled {
       opacity: 0.35;
       cursor: not-allowed;
     }
 
-    .mobile-font-size-input {
-      width: 44px;
+    .font-size-input {
+      width: 52px;
       height: 36px;
       padding: 0 4px;
       border: 1px solid #30363d;
@@ -785,13 +807,13 @@
       -moz-appearance: textfield;
     }
 
-    .mobile-font-size-input::-webkit-outer-spin-button,
-    .mobile-font-size-input::-webkit-inner-spin-button {
+    .font-size-input::-webkit-outer-spin-button,
+    .font-size-input::-webkit-inner-spin-button {
       -webkit-appearance: none;
       margin: 0;
     }
 
-    .mobile-font-size-input:focus {
+    .font-size-input:focus {
       outline: none;
       border-color: #58a6ff;
       box-shadow: 0 0 0 1px #58a6ff55;
@@ -895,8 +917,8 @@
         position: fixed;
         top: 48px;
         top: calc(48px + env(safe-area-inset-top));
-        bottom: 72px;
-        bottom: calc(72px + env(safe-area-inset-bottom));
+        bottom: 52px;
+        bottom: calc(52px + env(safe-area-inset-bottom));
         left: 0;
         right: 0;
         width: 100%;
@@ -952,6 +974,7 @@
     </div>
     <div class="header-actions">
       <button type="button" class="header-btn mobile-only" id="mobileOverviewBtn" title="返回总览">总览</button>
+      <button type="button" class="header-btn" id="settingsBtn" title="设置">设置</button>
       <button type="button" class="header-btn" id="resetLayoutBtn" title="所有窗口恢复默认大小">重置窗口</button>
     </div>
   </header>
@@ -960,18 +983,12 @@
     <button type="button" class="mobile-pager-back" id="mobileBackBtn">总览</button>
     <span class="mobile-pager-title" id="mobilePagerTitle"></span>
     <div class="mobile-pager-dots" id="mobilePagerDots"></div>
+    <button type="button" class="mobile-pager-settings" id="mobileSettingsBtn" title="设置">设置</button>
   </div>
 
   <div class="mobile-pager-bottom" id="mobilePagerBottom">
     <button type="button" class="mobile-pager-nav" id="mobilePrevBtn" aria-label="上一个 session">‹</button>
-    <div class="mobile-pager-center">
-      <div class="mobile-font-controls">
-        <button type="button" class="mobile-font-btn" id="mobileFontDown" aria-label="减小终端字体">A−</button>
-        <input type="number" class="mobile-font-size-input" id="mobileFontSizeInput" inputmode="numeric" min="6" max="24" step="1" aria-label="终端字号" title="输入字号后按回车或点其他地方生效">
-        <button type="button" class="mobile-font-btn" id="mobileFontUp" aria-label="增大终端字体">A+</button>
-      </div>
-      <span class="mobile-pager-index" id="mobilePagerIndex"></span>
-    </div>
+    <span class="mobile-pager-index" id="mobilePagerIndex"></span>
     <button type="button" class="mobile-pager-nav" id="mobileNextBtn" aria-label="下一个 session">›</button>
   </div>
 
@@ -995,6 +1012,26 @@
   </div>
 
   <div class="toast" id="toast"></div>
+
+  <div class="modal-backdrop" id="settingsModal">
+    <div class="modal" role="dialog" aria-labelledby="settingsModalTitle">
+      <div class="modal-header" id="settingsModalTitle">设置</div>
+      <div class="modal-body">
+        <div class="settings-row">
+          <span class="settings-row-label">终端字号</span>
+          <div class="font-size-controls">
+            <button type="button" class="font-size-btn" id="settingsFontDown" aria-label="减小终端字体">A−</button>
+            <input type="number" class="font-size-input" id="settingsFontSizeInput" inputmode="numeric" min="6" max="24" step="1" aria-label="终端字号">
+            <button type="button" class="font-size-btn" id="settingsFontUp" aria-label="增大终端字体">A+</button>
+          </div>
+        </div>
+        <p class="settings-row-hint">范围 6–24，对所有 tmux 终端生效。调整完成后点击「完成」才会重载终端页面。</p>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="primary" id="settingsCloseBtn">完成</button>
+      </div>
+    </div>
+  </div>
 
   <div class="modal-backdrop" id="createModal">
     <div class="modal" role="dialog" aria-labelledby="createModalTitle">
@@ -1021,6 +1058,12 @@
     const grid = document.getElementById('grid');
     const addBtn = document.getElementById('addBtn');
     const resetLayoutBtn = document.getElementById('resetLayoutBtn');
+    const settingsBtn = document.getElementById('settingsBtn');
+    const settingsModal = document.getElementById('settingsModal');
+    const settingsFontDown = document.getElementById('settingsFontDown');
+    const settingsFontUp = document.getElementById('settingsFontUp');
+    const settingsFontSizeInput = document.getElementById('settingsFontSizeInput');
+    const settingsCloseBtn = document.getElementById('settingsCloseBtn');
     const overlay = document.getElementById('overlay');
     const overlayTitle = document.getElementById('overlayTitle');
     const exitBtn = document.getElementById('exitBtn');
@@ -1038,9 +1081,7 @@
     const mobilePrevBtn = document.getElementById('mobilePrevBtn');
     const mobileNextBtn = document.getElementById('mobileNextBtn');
     const mobilePagerIndexEl = document.getElementById('mobilePagerIndex');
-    const mobileFontDown = document.getElementById('mobileFontDown');
-    const mobileFontUp = document.getElementById('mobileFontUp');
-    const mobileFontSizeInput = document.getElementById('mobileFontSizeInput');
+    const mobileSettingsBtn = document.getElementById('mobileSettingsBtn');
 
     const FONT_SIZE_KEY = 'tmux_ctl_font_size';
     const FONT_SIZE_MIN = 6;
@@ -1093,27 +1134,61 @@
       }
     }
 
-    function updateMobileFontControls() {
-      const size = getTerminalFontSize();
-      if (document.activeElement !== mobileFontSizeInput) {
-        mobileFontSizeInput.value = String(size);
-      }
-      mobileFontDown.disabled = size <= FONT_SIZE_MIN;
-      mobileFontUp.disabled = size >= FONT_SIZE_MAX;
+    function clampFontSize(size) {
+      return Math.max(FONT_SIZE_MIN, Math.min(FONT_SIZE_MAX, size));
     }
 
-    function commitFontSizeInput() {
-      const raw = mobileFontSizeInput.value.trim();
+    function readDraftFontSize() {
+      const raw = settingsFontSizeInput.value.trim();
+      const value = parseInt(raw, 10);
+      if (!Number.isFinite(value)) return getTerminalFontSize();
+      return clampFontSize(value);
+    }
+
+    function updateFontSizeControls(draftSize) {
+      const size = draftSize !== undefined ? clampFontSize(draftSize) : getTerminalFontSize();
+      settingsFontSizeInput.value = String(size);
+      settingsFontDown.disabled = size <= FONT_SIZE_MIN;
+      settingsFontUp.disabled = size >= FONT_SIZE_MAX;
+    }
+
+    function changeDraftFontSize(delta) {
+      const next = clampFontSize(readDraftFontSize() + delta * FONT_SIZE_STEP);
+      updateFontSizeControls(next);
+    }
+
+    function applySettingsFontSize() {
+      const raw = settingsFontSizeInput.value.trim();
       const value = parseInt(raw, 10);
       if (!Number.isFinite(value)) {
-        updateMobileFontControls();
         showToast(`请输入 ${FONT_SIZE_MIN}–${FONT_SIZE_MAX} 之间的整数`);
-        return;
+        updateFontSizeControls(getTerminalFontSize());
+        return false;
       }
-      const next = setTerminalFontSize(value);
-      if (next !== value) {
-        showToast(`字号范围 ${FONT_SIZE_MIN}–${FONT_SIZE_MAX}，已设为 ${next}`);
+      const clamped = clampFontSize(value);
+      const prev = getTerminalFontSize();
+      localStorage.setItem(FONT_SIZE_KEY, String(clamped));
+      updateFontSizeControls(clamped);
+      if (clamped !== prev) {
+        applyFontSizeToAllIframes(clamped);
+        showToast(`终端字号: ${clamped}`);
       }
+      return true;
+    }
+
+    function openSettingsModal() {
+      updateFontSizeControls(getTerminalFontSize());
+      settingsModal.classList.add('active');
+    }
+
+    function confirmSettingsModal() {
+      if (!applySettingsFontSize()) return;
+      settingsModal.classList.remove('active');
+    }
+
+    function cancelSettingsModal() {
+      updateFontSizeControls(getTerminalFontSize());
+      settingsModal.classList.remove('active');
     }
 
     function applyFontSizeToAllIframes(fontSize) {
@@ -1133,25 +1208,6 @@
           refreshAllCellFrames();
         }
       });
-    }
-
-    function setTerminalFontSize(size) {
-      const prev = getTerminalFontSize();
-      const clamped = Math.max(FONT_SIZE_MIN, Math.min(FONT_SIZE_MAX, size));
-      localStorage.setItem(FONT_SIZE_KEY, String(clamped));
-      if (clamped !== prev) {
-        applyFontSizeToAllIframes(clamped);
-      }
-      updateMobileFontControls();
-      return clamped;
-    }
-
-    function changeTerminalFontSize(delta) {
-      const prev = getTerminalFontSize();
-      const next = setTerminalFontSize(prev + delta * FONT_SIZE_STEP);
-      if (next !== prev) {
-        showToast(`终端字号: ${next}`);
-      }
     }
 
     function initTerminalIframe(iframe, baseUrl) {
@@ -1195,7 +1251,6 @@
       });
       mobilePrevBtn.disabled = mobilePagerIndex <= 0;
       mobileNextBtn.disabled = mobilePagerIndex >= cells.length - 1;
-      updateMobileFontControls();
     }
 
     function setMobilePagerIndex(index, smooth = true) {
@@ -2039,7 +2094,12 @@
     });
 
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && createModal.classList.contains('active')) {
+      if (e.key !== 'Escape') return;
+      if (settingsModal.classList.contains('active')) {
+        cancelSettingsModal();
+        return;
+      }
+      if (createModal.classList.contains('active')) {
         closeCreateModal();
       }
     });
@@ -2098,21 +2158,16 @@
     mobileOverviewBtn.addEventListener('click', exitMobilePager);
     mobilePrevBtn.addEventListener('click', () => goMobilePager(-1));
     mobileNextBtn.addEventListener('click', () => goMobilePager(1));
-    mobileFontDown.addEventListener('click', (e) => {
-      e.stopPropagation();
-      changeTerminalFontSize(-1);
+    settingsBtn.addEventListener('click', openSettingsModal);
+    mobileSettingsBtn.addEventListener('click', openSettingsModal);
+    settingsCloseBtn.addEventListener('click', confirmSettingsModal);
+    settingsModal.addEventListener('click', (e) => {
+      if (e.target === settingsModal) cancelSettingsModal();
     });
-    mobileFontUp.addEventListener('click', (e) => {
+    settingsFontDown.addEventListener('click', () => changeDraftFontSize(-1));
+    settingsFontUp.addEventListener('click', () => changeDraftFontSize(1));
+    settingsFontSizeInput.addEventListener('keydown', (e) => {
       e.stopPropagation();
-      changeTerminalFontSize(1);
-    });
-    mobileFontSizeInput.addEventListener('blur', commitFontSizeInput);
-    mobileFontSizeInput.addEventListener('keydown', (e) => {
-      e.stopPropagation();
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        mobileFontSizeInput.blur();
-      }
     });
     attachMobileSwipeNav(mobilePagerTop);
     attachMobileSwipeNav(mobilePagerBottom);
@@ -2128,7 +2183,7 @@
     });
 
     applyMobileMode();
-    updateMobileFontControls();
+    updateFontSizeControls(getTerminalFontSize());
     renderSessions(initialSessions);
     loadSessions();
   </script>
