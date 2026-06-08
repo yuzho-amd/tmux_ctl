@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
@@ -657,6 +657,325 @@
       font-size: 13px;
       padding: 8px 0;
     }
+
+    /* --- Mobile layout --- */
+    .mobile-only { display: none; }
+
+    .overview-tap-catcher {
+      display: none;
+      position: absolute;
+      inset: 0;
+      z-index: 5;
+      border: none;
+      padding: 0;
+      margin: 0;
+      background: transparent;
+      cursor: pointer;
+    }
+
+    .mobile-pager-top,
+    .mobile-pager-bottom {
+      display: none;
+      position: fixed;
+      left: 0;
+      right: 0;
+      z-index: 120;
+      background: #161b22;
+      border-color: #21262d;
+      touch-action: pan-y;
+    }
+
+    .mobile-pager-top {
+      top: 0;
+      align-items: center;
+      gap: 10px;
+      padding: max(8px, env(safe-area-inset-top)) 12px 8px;
+      border-bottom: 1px solid #21262d;
+      min-height: 48px;
+    }
+
+    .mobile-pager-bottom {
+      bottom: 0;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 8px 16px max(8px, env(safe-area-inset-bottom));
+      border-top: 1px solid #21262d;
+      min-height: 72px;
+    }
+
+    .mobile-pager-back {
+      flex-shrink: 0;
+      background: #21262d;
+      border: 1px solid #30363d;
+      color: #e6edf3;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .mobile-pager-title {
+      flex: 1;
+      min-width: 0;
+      font-size: 14px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .mobile-pager-dots {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    .mobile-pager-dot {
+      width: 8px;
+      height: 8px;
+      padding: 0;
+      border: none;
+      border-radius: 50%;
+      background: #484f58;
+      cursor: pointer;
+    }
+
+    .mobile-pager-dot.active {
+      background: #58a6ff;
+      transform: scale(1.15);
+    }
+
+    .mobile-pager-nav {
+      background: #21262d;
+      border: 1px solid #30363d;
+      color: #e6edf3;
+      width: 44px;
+      height: 44px;
+      border-radius: 8px;
+      font-size: 22px;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    .mobile-pager-nav:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+
+    .mobile-pager-index {
+      font-size: 13px;
+      color: #8b949e;
+      min-width: 64px;
+      text-align: center;
+    }
+
+    .mobile-pager-center {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .mobile-font-controls {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .mobile-font-btn {
+      background: #21262d;
+      border: 1px solid #30363d;
+      color: #e6edf3;
+      min-width: 36px;
+      height: 36px;
+      padding: 0 8px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    .mobile-font-btn:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+
+    .mobile-font-size-input {
+      width: 44px;
+      height: 36px;
+      padding: 0 4px;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      background: #0d1117;
+      color: #e6edf3;
+      font-size: 13px;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+      -moz-appearance: textfield;
+    }
+
+    .mobile-font-size-input::-webkit-outer-spin-button,
+    .mobile-font-size-input::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+
+    .mobile-font-size-input:focus {
+      outline: none;
+      border-color: #58a6ff;
+      box-shadow: 0 0 0 1px #58a6ff55;
+    }
+
+    @media (max-width: 768px) {
+      .mobile-only { display: inline-flex; }
+
+      body.mobile {
+        overflow: hidden;
+      }
+
+      body.mobile header {
+        padding: 10px 12px;
+        padding-top: max(10px, env(safe-area-inset-top));
+      }
+
+      body.mobile header h1 {
+        font-size: 14px;
+      }
+
+      body.mobile .hint,
+      body.mobile #resetLayoutBtn,
+      body.mobile .btn-drag,
+      body.mobile .btn-maximize,
+      body.mobile .cell-resize-handle {
+        display: none !important;
+      }
+
+      body.mobile .fab {
+        right: 16px;
+        bottom: max(80px, calc(16px + env(safe-area-inset-bottom)));
+        width: 52px;
+        height: 52px;
+        font-size: 28px;
+      }
+
+      body.mobile.mobile-overview #grid {
+        display: flex;
+        flex-direction: column;
+        flex-wrap: nowrap;
+        align-content: stretch;
+        gap: 10px;
+        padding: 12px;
+        padding-bottom: max(88px, calc(12px + env(safe-area-inset-bottom)));
+        overflow-x: hidden;
+        overflow-y: auto;
+        height: calc(100vh - 52px);
+        height: calc(100dvh - 52px);
+        min-height: 0;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      body.mobile.mobile-overview #grid.empty {
+        place-items: center;
+        justify-content: center;
+      }
+
+      body.mobile.mobile-overview .cell {
+        width: 100% !important;
+        height: 38vh !important;
+        height: 38dvh !important;
+        min-height: 200px;
+        max-height: 320px;
+        flex-shrink: 0;
+      }
+
+      body.mobile.mobile-overview .overview-tap-catcher {
+        display: block;
+      }
+
+      body.mobile.mobile-overview .cell.minimized .terminal-activator {
+        display: none;
+      }
+
+      body.mobile.mobile-pager {
+        overflow: hidden;
+      }
+
+      body.mobile.mobile-pager header {
+        display: none;
+      }
+
+      body.mobile.mobile-pager .mobile-pager-top,
+      body.mobile.mobile-pager .mobile-pager-bottom {
+        display: flex;
+      }
+
+      body.mobile.mobile-pager .fab {
+        bottom: max(68px, calc(12px + env(safe-area-inset-bottom)));
+      }
+
+      body.mobile.mobile-pager #grid {
+        display: flex;
+        flex-direction: row;
+        flex-wrap: nowrap;
+        align-content: stretch;
+        gap: 0;
+        padding: 0;
+        margin: 0;
+        position: fixed;
+        top: 48px;
+        top: calc(48px + env(safe-area-inset-top));
+        bottom: 72px;
+        bottom: calc(72px + env(safe-area-inset-bottom));
+        left: 0;
+        right: 0;
+        width: 100%;
+        height: auto;
+        min-height: 0;
+        overflow-x: auto;
+        overflow-y: hidden;
+        scroll-snap-type: x mandatory;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+      }
+
+      body.mobile.mobile-pager #grid::-webkit-scrollbar {
+        display: none;
+      }
+
+      body.mobile.mobile-pager .cell {
+        width: 100vw !important;
+        height: 100% !important;
+        min-height: 0;
+        max-height: none;
+        flex-shrink: 0;
+        scroll-snap-align: start;
+        scroll-snap-stop: always;
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
+      }
+
+      body.mobile.mobile-pager .cell-header {
+        display: none;
+      }
+
+      body.mobile.mobile-pager .overview-tap-catcher {
+        display: none !important;
+      }
+
+      body.mobile.mobile-pager .cell .terminal-frame iframe {
+        pointer-events: auto;
+      }
+
+      body.mobile #overlay {
+        display: none !important;
+      }
+    }
   </style>
 </head>
 <body>
@@ -666,10 +985,30 @@
       <span class="hint">拖动 ⠿ 排序 · 右下角拖大窗口 · ⤢ 放大 · Esc 最小化</span>
     </div>
     <div class="header-actions">
+      <button type="button" class="header-btn mobile-only" id="mobileOverviewBtn" title="返回总览">总览</button>
       <button type="button" class="header-btn" id="summarizeBtn" title="抓取所有 tmux 终端并由 AI 汇总状态">AI 汇总</button>
       <button type="button" class="header-btn" id="resetLayoutBtn" title="所有窗口恢复默认大小">重置窗口</button>
     </div>
   </header>
+
+  <div class="mobile-pager-top" id="mobilePagerTop">
+    <button type="button" class="mobile-pager-back" id="mobileBackBtn">总览</button>
+    <span class="mobile-pager-title" id="mobilePagerTitle"></span>
+    <div class="mobile-pager-dots" id="mobilePagerDots"></div>
+  </div>
+
+  <div class="mobile-pager-bottom" id="mobilePagerBottom">
+    <button type="button" class="mobile-pager-nav" id="mobilePrevBtn" aria-label="上一个 session">‹</button>
+    <div class="mobile-pager-center">
+      <div class="mobile-font-controls">
+        <button type="button" class="mobile-font-btn" id="mobileFontDown" aria-label="减小终端字体">A−</button>
+        <input type="number" class="mobile-font-size-input" id="mobileFontSizeInput" inputmode="numeric" min="6" max="24" step="1" aria-label="终端字号" title="输入字号后按回车或点其他地方生效">
+        <button type="button" class="mobile-font-btn" id="mobileFontUp" aria-label="增大终端字体">A+</button>
+      </div>
+      <span class="mobile-pager-index" id="mobilePagerIndex"></span>
+    </div>
+    <button type="button" class="mobile-pager-nav" id="mobileNextBtn" aria-label="下一个 session">›</button>
+  </div>
 
   <div id="grid" class="empty">
     <div class="empty-msg">
@@ -745,8 +1084,263 @@
     const tmuxOptions = document.getElementById('tmuxOptions');
     const createCancelBtn = document.getElementById('createCancelBtn');
     const createConfirmBtn = document.getElementById('createConfirmBtn');
+    const mobileOverviewBtn = document.getElementById('mobileOverviewBtn');
+    const mobilePagerTop = document.getElementById('mobilePagerTop');
+    const mobilePagerBottom = document.getElementById('mobilePagerBottom');
+    const mobileBackBtn = document.getElementById('mobileBackBtn');
+    const mobilePagerTitle = document.getElementById('mobilePagerTitle');
+    const mobilePagerDots = document.getElementById('mobilePagerDots');
+    const mobilePrevBtn = document.getElementById('mobilePrevBtn');
+    const mobileNextBtn = document.getElementById('mobileNextBtn');
+    const mobilePagerIndexEl = document.getElementById('mobilePagerIndex');
+    const mobileFontDown = document.getElementById('mobileFontDown');
+    const mobileFontUp = document.getElementById('mobileFontUp');
+    const mobileFontSizeInput = document.getElementById('mobileFontSizeInput');
+
+    const FONT_SIZE_KEY = 'tmux_ctl_font_size';
+    const FONT_SIZE_MIN = 6;
+    const FONT_SIZE_MAX = 24;
+    const FONT_SIZE_STEP = 1;
+    const FONT_SIZE_DEFAULT_DESKTOP = 14;
+    const FONT_SIZE_DEFAULT_MOBILE = 16;
 
     let activeView = null;
+    let isMobile = false;
+    let mobilePagerIndex = 0;
+    let mobileSwipeStartX = 0;
+    const MOBILE_SWIPE_THRESHOLD = 40;
+    const mobileQuery = window.matchMedia('(max-width: 768px) and (pointer: coarse)');
+
+    function gridCells() {
+      return [...grid.querySelectorAll('.cell')];
+    }
+
+    function buildTtydUrl(baseUrl, fontSize) {
+      try {
+        const url = new URL(baseUrl, window.location.origin);
+        url.searchParams.set('fontSize', String(fontSize));
+        return url.href;
+      } catch {
+        const sep = baseUrl.includes('?') ? '&' : '?';
+        return `${baseUrl}${sep}fontSize=${fontSize}`;
+      }
+    }
+
+    function getTerminalFontSize() {
+      const stored = localStorage.getItem(FONT_SIZE_KEY);
+      if (stored !== null) {
+        const value = parseInt(stored, 10);
+        if (Number.isFinite(value)) {
+          return Math.max(FONT_SIZE_MIN, Math.min(FONT_SIZE_MAX, value));
+        }
+      }
+      return isMobile ? FONT_SIZE_DEFAULT_MOBILE : FONT_SIZE_DEFAULT_DESKTOP;
+    }
+
+    function normalizeTtydBaseUrl(url) {
+      try {
+        const parsed = new URL(url, window.location.origin);
+        parsed.searchParams.delete('fontSize');
+        const qs = parsed.searchParams.toString();
+        return qs ? `${parsed.origin}${parsed.pathname}?${qs}` : `${parsed.origin}${parsed.pathname}`;
+      } catch {
+        return url.replace(/([?&])fontSize=\d+(&|$)/, (_, sep, tail) => (tail ? sep : '')).replace(/[?&]$/, '');
+      }
+    }
+
+    function updateMobileFontControls() {
+      const size = getTerminalFontSize();
+      if (document.activeElement !== mobileFontSizeInput) {
+        mobileFontSizeInput.value = String(size);
+      }
+      mobileFontDown.disabled = size <= FONT_SIZE_MIN;
+      mobileFontUp.disabled = size >= FONT_SIZE_MAX;
+    }
+
+    function commitFontSizeInput() {
+      const raw = mobileFontSizeInput.value.trim();
+      const value = parseInt(raw, 10);
+      if (!Number.isFinite(value)) {
+        updateMobileFontControls();
+        showToast(`请输入 ${FONT_SIZE_MIN}–${FONT_SIZE_MAX} 之间的整数`);
+        return;
+      }
+      const next = setTerminalFontSize(value);
+      if (next !== value) {
+        showToast(`字号范围 ${FONT_SIZE_MIN}–${FONT_SIZE_MAX}，已设为 ${next}`);
+      }
+    }
+
+    function applyFontSizeToAllIframes(fontSize) {
+      grid.querySelectorAll('.cell iframe').forEach((iframe) => {
+        if (!iframe.dataset.ttydBase) {
+          iframe.dataset.ttydBase = normalizeTtydBaseUrl(iframe.src);
+        }
+        const nextSrc = buildTtydUrl(iframe.dataset.ttydBase, fontSize);
+        if (iframe.src !== nextSrc) {
+          iframe.src = nextSrc;
+        }
+      });
+      requestAnimationFrame(() => {
+        if (document.body.classList.contains('mobile-pager')) {
+          setMobilePagerIndex(mobilePagerIndex, false);
+        } else {
+          refreshAllCellFrames();
+        }
+      });
+    }
+
+    function setTerminalFontSize(size) {
+      const prev = getTerminalFontSize();
+      const clamped = Math.max(FONT_SIZE_MIN, Math.min(FONT_SIZE_MAX, size));
+      localStorage.setItem(FONT_SIZE_KEY, String(clamped));
+      if (clamped !== prev) {
+        applyFontSizeToAllIframes(clamped);
+      }
+      updateMobileFontControls();
+      return clamped;
+    }
+
+    function changeTerminalFontSize(delta) {
+      const prev = getTerminalFontSize();
+      const next = setTerminalFontSize(prev + delta * FONT_SIZE_STEP);
+      if (next !== prev) {
+        showToast(`终端字号: ${next}`);
+      }
+    }
+
+    function initTerminalIframe(iframe, baseUrl) {
+      iframe.dataset.ttydBase = normalizeTtydBaseUrl(baseUrl);
+      iframe.src = buildTtydUrl(iframe.dataset.ttydBase, getTerminalFontSize());
+    }
+
+    function refreshAllCellFrames() {
+      gridCells().forEach((cell) => {
+        fitFrameToGrid(cell);
+      });
+    }
+
+    function renderMobilePagerDots() {
+      mobilePagerDots.innerHTML = '';
+      gridCells().forEach((cell, i) => {
+        const dot = document.createElement('button');
+        dot.type = 'button';
+        dot.className = 'mobile-pager-dot';
+        if (i === mobilePagerIndex) dot.classList.add('active');
+        dot.setAttribute('aria-label', `Session ${i + 1}`);
+        dot.addEventListener('click', () => setMobilePagerIndex(i));
+        mobilePagerDots.appendChild(dot);
+      });
+    }
+
+    function updateMobilePagerChrome() {
+      const cells = gridCells();
+      if (!cells.length) {
+        mobilePagerTitle.textContent = '';
+        mobilePagerIndexEl.textContent = '';
+        return;
+      }
+      mobilePagerIndex = Math.max(0, Math.min(mobilePagerIndex, cells.length - 1));
+      const cell = cells[mobilePagerIndex];
+      const titleEl = cell.querySelector('.cell-title-display');
+      mobilePagerTitle.textContent = (titleEl?.textContent || '').trim() || `session-${mobilePagerIndex + 1}`;
+      mobilePagerIndexEl.textContent = `${mobilePagerIndex + 1} / ${cells.length}`;
+      mobilePagerDots.querySelectorAll('.mobile-pager-dot').forEach((dot, i) => {
+        dot.classList.toggle('active', i === mobilePagerIndex);
+      });
+      mobilePrevBtn.disabled = mobilePagerIndex <= 0;
+      mobileNextBtn.disabled = mobilePagerIndex >= cells.length - 1;
+      updateMobileFontControls();
+    }
+
+    function setMobilePagerIndex(index, smooth = true) {
+      const cells = gridCells();
+      if (!cells.length) return;
+      mobilePagerIndex = Math.max(0, Math.min(index, cells.length - 1));
+      const cell = cells[mobilePagerIndex];
+      cell.scrollIntoView({
+        behavior: smooth ? 'smooth' : 'auto',
+        inline: 'start',
+        block: 'nearest',
+      });
+      requestAnimationFrame(() => {
+        fitFrameToGrid(cell);
+        cell.classList.remove('minimized');
+        cell.classList.remove('minimized-active');
+        updateMobilePagerChrome();
+      });
+    }
+
+    function goMobilePager(delta) {
+      setMobilePagerIndex(mobilePagerIndex + delta);
+    }
+
+    function enterMobilePager(cell) {
+      if (!isMobile) return;
+      const cells = gridCells();
+      const index = cells.indexOf(cell);
+      if (index < 0) return;
+      if (activeView) minimizeSession();
+      document.body.classList.remove('mobile-overview');
+      document.body.classList.add('mobile-pager');
+      mobileOverviewBtn.style.display = 'inline-flex';
+      mobilePagerIndex = index;
+      renderMobilePagerDots();
+      requestAnimationFrame(() => {
+        setMobilePagerIndex(index, false);
+      });
+    }
+
+    function exitMobilePager() {
+      if (!isMobile) return;
+      document.body.classList.remove('mobile-pager');
+      document.body.classList.add('mobile-overview');
+      mobileOverviewBtn.style.display = 'none';
+      grid.scrollTop = 0;
+      requestAnimationFrame(refreshAllCellFrames);
+    }
+
+    function applyMobileMode() {
+      isMobile = mobileQuery.matches;
+      if (isMobile) {
+        document.body.classList.add('mobile');
+        if (!document.body.classList.contains('mobile-pager')) {
+          document.body.classList.add('mobile-overview');
+          document.body.classList.remove('mobile-pager');
+          mobileOverviewBtn.style.display = 'none';
+        } else {
+          mobileOverviewBtn.style.display = 'inline-flex';
+        }
+        if (activeView) minimizeSession();
+        requestAnimationFrame(refreshAllCellFrames);
+        setCellsDraggable(false);
+        return;
+      }
+
+      document.body.classList.remove('mobile', 'mobile-overview', 'mobile-pager');
+      mobileOverviewBtn.style.display = 'none';
+      setCellsDraggable(true);
+      if (activeView) {
+        requestAnimationFrame(() => fitFrameToGrid(activeView.cell));
+      } else {
+        requestAnimationFrame(refreshAllCellFrames);
+      }
+    }
+
+    function attachMobileSwipeNav(el) {
+      el.addEventListener('touchstart', (e) => {
+        if (e.touches.length !== 1) return;
+        mobileSwipeStartX = e.touches[0].clientX;
+      }, { passive: true });
+
+      el.addEventListener('touchend', (e) => {
+        if (!document.body.classList.contains('mobile-pager')) return;
+        const dx = e.changedTouches[0].clientX - mobileSwipeStartX;
+        if (Math.abs(dx) < MOBILE_SWIPE_THRESHOLD) return;
+        if (dx < 0) goMobilePager(1);
+        else goMobilePager(-1);
+      }, { passive: true });
+    }
 
     function showToast(msg) {
       toast.textContent = msg;
@@ -818,6 +1412,9 @@
       }
       if (overlayTitle !== sourceEl && activeView?.session.id === session.id) {
         overlayTitle.value = session.title;
+      }
+      if (isMobile && document.body.classList.contains('mobile-pager')) {
+        updateMobilePagerChrome();
       }
       return true;
     }
@@ -898,6 +1495,10 @@
       handle.addEventListener('click', (e) => e.stopPropagation());
 
       cell.addEventListener('dragstart', (e) => {
+        if (isMobile) {
+          e.preventDefault();
+          return;
+        }
         if (!dragAllowed) {
           e.preventDefault();
           return;
@@ -1004,7 +1605,7 @@
       let startH = 0;
 
       handle.addEventListener('pointerdown', (e) => {
-        if (cell.classList.contains('expanded')) return;
+        if (isMobile || cell.classList.contains('expanded')) return;
         e.preventDefault();
         e.stopPropagation();
         startX = e.clientX;
@@ -1150,6 +1751,10 @@
     }
 
     function openSession(session, cell) {
+      if (isMobile) {
+        enterMobilePager(cell);
+        return;
+      }
       if (activeView?.cell === cell) return;
 
       if (activeView) {
@@ -1238,9 +1843,25 @@
         const name = session.title || session.defaultTitle || session.id;
         if (!confirm(`确定关闭 session「${name}」吗？\n终端工作区将被删除。`)) return;
         if (activeView && activeView.session.id === session.id) minimizeSession();
+        if (isMobile && document.body.classList.contains('mobile-pager')) {
+          const cells = gridCells();
+          const idx = cells.indexOf(cell);
+          if (idx >= 0 && idx <= mobilePagerIndex && mobilePagerIndex > 0) {
+            mobilePagerIndex -= 1;
+          }
+        }
         await fetch(`/api/sessions/${session.id}`, { ...fetchOpts, method: 'DELETE' });
         cell.remove();
         updateEmptyState();
+        if (isMobile && document.body.classList.contains('mobile-pager')) {
+          const remaining = gridCells();
+          if (!remaining.length) {
+            exitMobilePager();
+          } else {
+            renderMobilePagerDots();
+            setMobilePagerIndex(Math.min(mobilePagerIndex, remaining.length - 1), false);
+          }
+        }
       });
 
       actions.appendChild(dragBtn);
@@ -1256,7 +1877,7 @@
       const frame = document.createElement('div');
       frame.className = 'terminal-frame';
       const iframe = document.createElement('iframe');
-      iframe.src = session.url;
+      initTerminalIframe(iframe, session.url);
       iframe.setAttribute('allow', 'clipboard-read; clipboard-write');
       frame.appendChild(iframe);
       viewport.appendChild(frame);
@@ -1271,9 +1892,24 @@
         e.preventDefault();
         e.stopPropagation();
         if (!cell.classList.contains('minimized')) return;
+        if (isMobile) {
+          enterMobilePager(cell);
+          return;
+        }
         repaintMinimizedTerminal(cell);
       });
       viewport.appendChild(activator);
+
+      const overviewTap = document.createElement('button');
+      overviewTap.type = 'button';
+      overviewTap.className = 'overview-tap-catcher';
+      overviewTap.setAttribute('aria-label', '打开全屏终端');
+      overviewTap.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (isMobile) enterMobilePager(cell);
+      });
+      viewport.appendChild(overviewTap);
 
       cell.appendChild(header);
       cell.appendChild(viewport);
@@ -1284,9 +1920,17 @@
     }
 
     function renderSessions(list) {
+      if (activeView) minimizeSession();
+      if (isMobile && document.body.classList.contains('mobile-pager')) {
+        exitMobilePager();
+      }
       grid.querySelectorAll('.cell').forEach((cell) => cell.remove());
       list.forEach((s, i) => grid.appendChild(createCell(s, i)));
       updateEmptyState();
+      if (isMobile) {
+        requestAnimationFrame(refreshAllCellFrames);
+      }
+      setCellsDraggable(!isMobile);
     }
 
     async function loadSessions() {
@@ -1425,6 +2069,14 @@
         closeCreateModal();
         grid.appendChild(createCell(data, grid.querySelectorAll('.cell').length));
         updateEmptyState();
+        if (isMobile) {
+          requestAnimationFrame(refreshAllCellFrames);
+          if (document.body.classList.contains('mobile-pager')) {
+            renderMobilePagerDots();
+            setMobilePagerIndex(gridCells().length - 1, false);
+          }
+        }
+        setCellsDraggable(!isMobile);
       } catch (err) {
         showToast('网络错误: ' + err.message);
       } finally {
@@ -1517,6 +2169,78 @@
       }
     });
 
+    function setCellsDraggable(enabled) {
+      gridCells().forEach((cell) => {
+        cell.draggable = enabled;
+      });
+    }
+
+    function onMobileGridScroll() {
+      if (!document.body.classList.contains('mobile-pager')) return;
+      const cells = gridCells();
+      if (!cells.length) return;
+      const gridRect = grid.getBoundingClientRect();
+      const mid = gridRect.left + gridRect.width / 2;
+      let bestIdx = 0;
+      let bestDist = Infinity;
+      cells.forEach((cell, i) => {
+        const rect = cell.getBoundingClientRect();
+        const cellMid = rect.left + rect.width / 2;
+        const dist = Math.abs(cellMid - mid);
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestIdx = i;
+        }
+      });
+      if (bestIdx !== mobilePagerIndex) {
+        mobilePagerIndex = bestIdx;
+        updateMobilePagerChrome();
+        fitFrameToGrid(cells[bestIdx]);
+      }
+    }
+
+    let gridScrollTimer = null;
+    grid.addEventListener('scroll', () => {
+      if (!document.body.classList.contains('mobile-pager')) return;
+      clearTimeout(gridScrollTimer);
+      gridScrollTimer = setTimeout(onMobileGridScroll, 120);
+    }, { passive: true });
+
+    mobileBackBtn.addEventListener('click', exitMobilePager);
+    mobileOverviewBtn.addEventListener('click', exitMobilePager);
+    mobilePrevBtn.addEventListener('click', () => goMobilePager(-1));
+    mobileNextBtn.addEventListener('click', () => goMobilePager(1));
+    mobileFontDown.addEventListener('click', (e) => {
+      e.stopPropagation();
+      changeTerminalFontSize(-1);
+    });
+    mobileFontUp.addEventListener('click', (e) => {
+      e.stopPropagation();
+      changeTerminalFontSize(1);
+    });
+    mobileFontSizeInput.addEventListener('blur', commitFontSizeInput);
+    mobileFontSizeInput.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        mobileFontSizeInput.blur();
+      }
+    });
+    attachMobileSwipeNav(mobilePagerTop);
+    attachMobileSwipeNav(mobilePagerBottom);
+
+    mobileQuery.addEventListener('change', applyMobileMode);
+    window.addEventListener('resize', () => {
+      if (!isMobile) return;
+      if (document.body.classList.contains('mobile-pager')) {
+        setMobilePagerIndex(mobilePagerIndex, false);
+      } else {
+        refreshAllCellFrames();
+      }
+    });
+
+    applyMobileMode();
+    updateMobileFontControls();
     renderSessions(initialSessions);
     loadSessions();
   </script>
