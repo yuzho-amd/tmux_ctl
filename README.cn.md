@@ -81,6 +81,11 @@ http://127.0.0.1:5000/auth?token=your-secret-token
 | `DEBUG` | `1` | 调试模式（改代码自动重载） |
 | `TTYD_BASE_PORT` | `7681` | ttyd 起始端口 |
 | `TTYD_BIN` | 自动查找 | ttyd 可执行文件路径 |
+| `OPENAI_API_KEY` | — | **AI 汇总** 必填；OpenAI 或兼容 API 的密钥 |
+| `OPENAI_BASE_URL` | `https://api.openai.com/v1` | 兼容 API 的 base URL |
+| `SUMMARIZE_MODEL` | `gpt-4o-mini` | 汇总使用的模型 |
+| `SUMMARIZE_MAX_CHARS_PER_SESSION` | `12000` | 每个 session 送入模型的最大字符数 |
+| `SUMMARIZE_TIMEOUT` | `120` | 调用 LLM 的超时（秒） |
 
 ## 鉴权
 
@@ -96,5 +101,20 @@ http://127.0.0.1:5000/auth?token=your-secret-token
 2. 点击标题可编辑备注
 3. 拖动 **⠿** 调整格子顺序；拖动 **右下角** 调整窗口大小
 4. 点击 **⤢** 全屏放大，**Esc** /「最小化」回到网格
-5. 右上角 **重置窗口** 将所有格子恢复为默认大小
-6. 格子右上角 **×** 关闭 session
+5. 右上角 **AI 汇总** 自动抓取所有 tmux 终端内容并由 AI 生成状态报告（无需逐个点击查看）
+6. 右上角 **重置窗口** 将所有格子恢复为默认大小
+7. 格子右上角 **×** 关闭 session
+
+### AI 汇总
+
+1. 启动前设置 `OPENAI_API_KEY`（及可选的 `OPENAI_BASE_URL`、`SUMMARIZE_MODEL`）
+2. 在页面右上角点击 **AI 汇总**，或调用 API：
+
+```bash
+curl -s -X POST http://127.0.0.1:5000/api/summarize \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"lines": 500}'
+```
+
+仅抓取终端原文（不调用 LLM）：`GET /api/sessions/capture?lines=500`

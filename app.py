@@ -21,6 +21,7 @@ from typing import Any
 from flask import Flask, jsonify, redirect, render_template, request
 
 import db
+import summarize as summarize_mod
 
 app = Flask(__name__)
 app.config["TEMPLATES_AUTO_RELOAD"] = True
@@ -200,6 +201,25 @@ def _kill_tmux_session_by_name(tmux_name: str) -> None:
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
+
+
+def _capture_all_sessions(scrollback_lines: int = 500) -> list[dict[str, Any]]:
+    _ensure_sessions()
+    captures: list[dict[str, Any]] = []
+    for row in db.list_sessions():
+        tmux_name = db.tmux_session_for(row)
+        title = db.display_title(row)
+        text = summarize_mod.capture_tmux_pane(tmux_name, scrollback_lines)
+        captures.append(
+            {
+                "id": row["id"],
+                "title": title,
+                "tmuxSession": tmux_name,
+                "text": text,
+                "lineCount": len(text.splitlines()) if text else 0,
+            }
+        )
+    return captures
 
 
 def _kill_tmux_session(session_id: str, tmux_name: str | None = None) -> None:
@@ -513,6 +533,63 @@ def index():
 @app.route("/api/sessions", methods=["GET"])
 def list_sessions():
     return jsonify(_ordered_session_payloads())
+
+
+@app.route("/api/sessions/capture", methods=["GET"])
+def capture_sessions():
+    lines = request.args.get("lines", "500")
+    try:
+        scrollback_lines = max(0, min(int(lines), 10000))
+    except ValueError:
+        return jsonify({"error": "lines must be an integer"}), 400
+    captures = _capture_all_sessions(scrollback_lines)
+    return jsonify({"captures": captures, "lines": scrollback_lines})
+
+
+@app.route("/api/summarize", methods=["POST"])
+def summarize_sessions():
+    data = request.get_json(silent=True) or {}
+    raw_lines = data.get("lines", request.args.get("lines", 500))
+    try:
+        scrollback_lines = max(0, min(int(raw_lines), 10000))
+    except (TypeError, ValueError):
+        return jsonify({"error": "lines must be an integer"}), 400
+
+    captures = _capture_all_sessions(scrollback_lines)
+    if not captures:
+        return jsonify(
+            {
+                "summary": "当前没有 session，请先创建终端格子。",
+                "captures": [],
+                "summarized": False,
+                "lines": scrollback_lines,
+            }
+        )
+
+    only_capture = bool(data.get("captureOnly"))
+    if only_capture:
+        return jsonify(
+            {
+                "summary": "",
+                "captures": captures,
+                "summarized": False,
+                "lines": scrollback_lines,
+            }
+        )
+
+    try:
+        summary_text = summarize_mod.summarize_captures(captures)
+    except RuntimeError as exc:
+        return jsonify({"error": str(exc)}), 503
+
+    return jsonify(
+        {
+            "summary": summary_text,
+            "captures": captures,
+            "summarized": True,
+            "lines": scrollback_lines,
+        }
+    )
 
 
 @app.route("/api/tmux/sessions", methods=["GET"])
