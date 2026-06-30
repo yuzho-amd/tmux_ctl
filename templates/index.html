@@ -252,6 +252,68 @@
       user-select: all;
     }
 
+    .cell-recency-tag {
+      display: none;
+      flex-shrink: 0;
+      align-self: flex-start;
+      margin-top: 1px;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 4px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 18px;
+      text-align: center;
+      color: #8b949e;
+      background: #21262d;
+      border: 1px solid #30363d;
+      border-radius: 4px;
+      font-variant-numeric: tabular-nums;
+      user-select: none;
+    }
+
+    .cell-recency-tag.has-tag {
+      display: inline-block;
+    }
+
+    .cell-recency-tag.is-latest {
+      color: #fff;
+      background: #238636;
+      border-color: #2ea043;
+    }
+
+    .overlay-recency-tag {
+      display: none;
+      flex-shrink: 0;
+      align-self: flex-start;
+      margin-top: 4px;
+      min-width: 22px;
+      height: 24px;
+      padding: 0 6px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 24px;
+      text-align: center;
+      color: #8b949e;
+      background: #21262d;
+      border: 1px solid #30363d;
+      border-radius: 4px;
+      font-variant-numeric: tabular-nums;
+      user-select: none;
+    }
+
+    .overlay-recency-tag.has-tag {
+      display: inline-block;
+    }
+
+    .overlay-recency-tag.is-latest {
+      color: #fff;
+      background: #238636;
+      border-color: #2ea043;
+    }
+
     .overlay-title {
       flex: 1;
       min-width: 0;
@@ -1078,6 +1140,7 @@
 
   <div id="overlay">
     <div class="overlay-bar">
+      <span id="overlayRecencyTag" class="overlay-recency-tag" aria-label="操作序号"></span>
       <textarea id="overlayTitle" class="overlay-title" rows="1" placeholder="点击输入备注..."></textarea>
       <div class="overlay-actions">
         <button id="exitBtn">最小化 (Esc)</button>
@@ -1141,6 +1204,7 @@
     const settingsCloseBtn = document.getElementById('settingsCloseBtn');
     const overlay = document.getElementById('overlay');
     const overlayTitle = document.getElementById('overlayTitle');
+    const overlayRecencyTag = document.getElementById('overlayRecencyTag');
     const exitBtn = document.getElementById('exitBtn');
     const toast = document.getElementById('toast');
     const createModal = document.getElementById('createModal');
@@ -1174,6 +1238,62 @@
 
     function gridCells() {
       return [...grid.querySelectorAll('.cell')];
+    }
+
+    // 按「最近操作顺序」排列的 session id 列表（最近在前 = 0）
+    let recencyOrder = [];
+
+    function bumpRecency(sessionId) {
+      if (!sessionId) return;
+      const idx = recencyOrder.indexOf(sessionId);
+      if (idx === 0) return;
+      if (idx > 0) recencyOrder.splice(idx, 1);
+      recencyOrder.unshift(sessionId);
+      updateRecencyTags();
+    }
+
+    function removeRecency(sessionId) {
+      const idx = recencyOrder.indexOf(sessionId);
+      if (idx >= 0) {
+        recencyOrder.splice(idx, 1);
+        updateRecencyTags();
+      }
+    }
+
+    function mergeRecencyAfterRender(sessionIds) {
+      const alive = new Set(sessionIds);
+      recencyOrder = recencyOrder.filter((id) => alive.has(id));
+    }
+
+    function updateRecencyTags() {
+      gridCells().forEach((cell) => {
+        const tagEl = cell.querySelector('.cell-recency-tag');
+        if (!tagEl) return;
+        const rank = recencyOrder.indexOf(cell.dataset.id);
+        if (rank < 0) {
+          tagEl.classList.remove('has-tag', 'is-latest');
+          tagEl.textContent = '';
+        } else {
+          tagEl.classList.add('has-tag');
+          tagEl.classList.toggle('is-latest', rank === 0);
+          tagEl.textContent = String(rank);
+        }
+      });
+      updateOverlayRecencyTag();
+    }
+
+    function updateOverlayRecencyTag() {
+      if (!overlayRecencyTag) return;
+      const id = activeView?.session?.id;
+      const rank = id ? recencyOrder.indexOf(id) : -1;
+      if (rank < 0) {
+        overlayRecencyTag.classList.remove('has-tag', 'is-latest');
+        overlayRecencyTag.textContent = '';
+      } else {
+        overlayRecencyTag.classList.add('has-tag');
+        overlayRecencyTag.classList.toggle('is-latest', rank === 0);
+        overlayRecencyTag.textContent = String(rank);
+      }
     }
 
     function buildTtydUrl(baseUrl, fontSize) {
@@ -1319,7 +1439,9 @@
       mobilePagerIndex = Math.max(0, Math.min(mobilePagerIndex, cells.length - 1));
       const cell = cells[mobilePagerIndex];
       const titleEl = cell.querySelector('.cell-title-display');
-      mobilePagerTitle.textContent = (titleEl?.textContent || '').trim() || `session-${mobilePagerIndex + 1}`;
+      const baseTitle = (titleEl?.textContent || '').trim() || `session-${mobilePagerIndex + 1}`;
+      const rank = recencyOrder.indexOf(cell.dataset.id);
+      mobilePagerTitle.textContent = rank >= 0 ? `${rank} · ${baseTitle}` : baseTitle;
       mobilePagerIndexEl.textContent = `${mobilePagerIndex + 1} / ${cells.length}`;
       mobilePagerDots.querySelectorAll('.mobile-pager-dot').forEach((dot, i) => {
         dot.classList.toggle('active', i === mobilePagerIndex);
@@ -1333,6 +1455,7 @@
       if (!cells.length) return;
       mobilePagerIndex = Math.max(0, Math.min(index, cells.length - 1));
       const cell = cells[mobilePagerIndex];
+      bumpRecency(cell.dataset.id);
       cell.scrollIntoView({
         behavior: smooth ? 'smooth' : 'auto',
         inline: 'start',
@@ -1798,6 +1921,7 @@
     }
 
     function repaintMinimizedTerminal(cell) {
+      bumpRecency(cell.dataset.id);
       fitFrameToGrid(cell);
       cell.classList.add('minimized-active');
       requestAnimationFrame(() => {
@@ -1830,6 +1954,7 @@
         enterMobilePager(cell);
         return;
       }
+      bumpRecency(session.id);
       if (activeView?.cell === cell) return;
 
       if (activeView) {
@@ -1848,6 +1973,7 @@
       activeView = { session, cell, placeholder };
 
       overlayTitle.value = session.title || session.defaultTitle || 'session';
+      updateOverlayRecencyTag();
       overlay.classList.add('active');
       document.body.classList.add('session-expanded');
       cell.style.width = '';
@@ -1875,6 +2001,11 @@
 
       const header = document.createElement('div');
       header.className = 'cell-header';
+
+      const recencyTagEl = document.createElement('span');
+      recencyTagEl.className = 'cell-recency-tag';
+      recencyTagEl.setAttribute('aria-label', '操作序号');
+      header.appendChild(recencyTagEl);
 
       const titleEl = document.createElement('div');
       titleEl.className = 'cell-title-display';
@@ -1927,6 +2058,7 @@
         }
         await fetch(`/api/sessions/${session.id}`, { ...fetchOpts, method: 'DELETE' });
         cell.remove();
+        removeRecency(session.id);
         updateEmptyState();
         if (isMobile && document.body.classList.contains('mobile-pager')) {
           const remaining = gridCells();
@@ -1949,6 +2081,7 @@
 
       const viewport = document.createElement('div');
       viewport.className = 'terminal-viewport';
+      viewport.addEventListener('mousedown', () => bumpRecency(session.id));
       const frame = document.createElement('div');
       frame.className = 'terminal-frame';
       const iframe = document.createElement('iframe');
@@ -2001,6 +2134,8 @@
       }
       grid.querySelectorAll('.cell').forEach((cell) => cell.remove());
       list.forEach((s, i) => grid.appendChild(createCell(s, i)));
+      mergeRecencyAfterRender(list.map((s) => s.id));
+      updateRecencyTags();
       updateEmptyState();
       if (isMobile) {
         requestAnimationFrame(refreshAllCellFrames);
@@ -2217,6 +2352,7 @@
       });
       if (bestIdx !== mobilePagerIndex) {
         mobilePagerIndex = bestIdx;
+        bumpRecency(cells[bestIdx].dataset.id);
         updateMobilePagerChrome();
         fitFrameToGrid(cells[bestIdx]);
       }
@@ -2246,6 +2382,17 @@
     });
     attachMobileSwipeNav(mobilePagerTop);
     attachMobileSwipeNav(mobilePagerBottom);
+
+    // 点进终端 iframe 时父窗口会 blur，且 activeElement 变为该 iframe
+    window.addEventListener('blur', () => {
+      setTimeout(() => {
+        const el = document.activeElement;
+        if (el && el.tagName === 'IFRAME') {
+          const cell = el.closest('.cell');
+          if (cell) bumpRecency(cell.dataset.id);
+        }
+      }, 0);
+    });
 
     mobileQuery.addEventListener('change', applyMobileMode);
     window.addEventListener('resize', () => {
