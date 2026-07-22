@@ -252,6 +252,23 @@
       user-select: all;
     }
 
+    .cell-backend-tag {
+      flex-shrink: 0;
+      align-self: flex-start;
+      margin-top: 3px;
+      font-size: 10px;
+      color: #79c0ff;
+      background: #1c2128;
+      border: 1px solid rgba(56, 139, 253, 0.35);
+      border-radius: 3px;
+      padding: 1px 5px;
+      max-width: 96px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      user-select: none;
+    }
+
     .cell-recency-tag {
       display: none;
       flex-shrink: 0;
@@ -615,6 +632,10 @@
       overflow: hidden;
     }
 
+    .modal.settings-modal {
+      width: min(520px, 100%);
+    }
+
     .modal-header {
       padding: 16px 18px 8px;
       font-size: 16px;
@@ -840,6 +861,156 @@
       font-size: 12px;
       color: #8b949e;
       line-height: 1.5;
+    }
+
+    .settings-section {
+      margin-top: 20px;
+      padding-top: 16px;
+      border-top: 1px solid #21262d;
+    }
+
+    .settings-section-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #e6edf3;
+      margin-bottom: 6px;
+    }
+
+    .backend-list {
+      margin-top: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .backend-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: start;
+      padding: 10px;
+      border: 1px solid #21262d;
+      border-radius: 8px;
+      background: #0d1117;
+    }
+
+    .backend-row.is-local {
+      opacity: 0.85;
+    }
+
+    .backend-row.is-editing {
+      border-color: #388bfd;
+      box-shadow: 0 0 0 1px rgba(56, 139, 253, 0.35);
+    }
+
+    .backend-row.is-hidden-backend {
+      opacity: 0.55;
+    }
+
+    .backend-row-actions button.is-active {
+      color: #58a6ff;
+      border-color: #388bfd;
+    }
+
+    .backend-row-main {
+      min-width: 0;
+    }
+
+    .backend-row-name {
+      font-size: 13px;
+      color: #e6edf3;
+      font-weight: 600;
+    }
+
+    .backend-row-url {
+      margin-top: 2px;
+      font-size: 11px;
+      color: #8b949e;
+      word-break: break-all;
+    }
+
+    .backend-row-actions {
+      display: flex;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    .backend-row-actions button {
+      background: #21262d;
+      border: 1px solid #30363d;
+      color: #e6edf3;
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      cursor: pointer;
+    }
+
+    .backend-row-actions button:hover {
+      background: #30363d;
+    }
+
+    .backend-row-actions button.danger {
+      color: #ff7b72;
+    }
+
+    .backend-add-form {
+      margin-top: 12px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .backend-add-form input {
+      width: 100%;
+      box-sizing: border-box;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      color: #e6edf3;
+      padding: 8px 10px;
+      font-size: 13px;
+    }
+
+    .backend-add-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .backend-add-actions button {
+      background: #21262d;
+      border: 1px solid #30363d;
+      color: #e6edf3;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .backend-add-actions button.primary {
+      background: #238636;
+      border-color: #2ea043;
+    }
+
+    .create-backend-row {
+      margin-bottom: 12px;
+    }
+
+    .create-backend-row label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 13px;
+      color: #e6edf3;
+    }
+
+    .create-backend-row select {
+      width: 100%;
+      box-sizing: border-box;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      color: #e6edf3;
+      padding: 8px 10px;
+      font-size: 13px;
     }
 
     .font-size-controls {
@@ -1152,7 +1323,7 @@
   <div class="toast" id="toast"></div>
 
   <div class="modal-backdrop" id="settingsModal">
-    <div class="modal" role="dialog" aria-labelledby="settingsModalTitle">
+    <div class="modal settings-modal" role="dialog" aria-labelledby="settingsModalTitle">
       <div class="modal-header" id="settingsModalTitle">设置</div>
       <div class="modal-body">
         <div class="settings-row">
@@ -1164,6 +1335,21 @@
           </div>
         </div>
         <p class="settings-row-hint">范围 6–24，对所有 tmux 终端生效。调整完成后点击「完成」才会重载终端页面。</p>
+        <div class="settings-section">
+          <div class="settings-section-title">远程后端</div>
+          <p class="settings-row-hint">聚合多台 TMUX Ctl 的 session；远程实例无需修改，填写地址与 token 即可。点「隐藏」可暂时不显示该后端的 session。</p>
+          <div class="backend-list" id="backendList"></div>
+          <div class="backend-add-form">
+            <input type="text" id="backendAddName" placeholder="名称，如 xcomx300-1" autocomplete="off">
+            <input type="url" id="backendAddUrl" placeholder="http://xcomx300-1:5001" autocomplete="off">
+            <input type="password" id="backendAddToken" placeholder="Token（Bearer）" autocomplete="off">
+            <div class="backend-add-actions">
+              <button type="button" id="backendTestBtn">测试连接</button>
+              <button type="button" id="backendCancelEditBtn" hidden>取消编辑</button>
+              <button type="button" class="primary" id="backendAddBtn">添加后端</button>
+            </div>
+          </div>
+        </div>
       </div>
       <div class="modal-actions">
         <button type="button" class="primary" id="settingsCloseBtn">完成</button>
@@ -1175,6 +1361,10 @@
     <div class="modal" role="dialog" aria-labelledby="createModalTitle">
       <div class="modal-header" id="createModalTitle">新建 session</div>
       <div class="modal-body">
+        <div class="create-backend-row">
+          <label for="createBackendSelect">目标后端</label>
+          <select id="createBackendSelect"></select>
+        </div>
         <p>选择复用已有 tmux session，或新建一个。</p>
         <div class="tmux-options" id="tmuxOptions">
           <label class="tmux-option">
@@ -1202,12 +1392,20 @@
     const settingsFontUp = document.getElementById('settingsFontUp');
     const settingsFontSizeInput = document.getElementById('settingsFontSizeInput');
     const settingsCloseBtn = document.getElementById('settingsCloseBtn');
+    const backendList = document.getElementById('backendList');
+    const backendAddName = document.getElementById('backendAddName');
+    const backendAddUrl = document.getElementById('backendAddUrl');
+    const backendAddToken = document.getElementById('backendAddToken');
+    const backendTestBtn = document.getElementById('backendTestBtn');
+    const backendCancelEditBtn = document.getElementById('backendCancelEditBtn');
+    const backendAddBtn = document.getElementById('backendAddBtn');
     const overlay = document.getElementById('overlay');
     const overlayTitle = document.getElementById('overlayTitle');
     const overlayRecencyTag = document.getElementById('overlayRecencyTag');
     const exitBtn = document.getElementById('exitBtn');
     const toast = document.getElementById('toast');
     const createModal = document.getElementById('createModal');
+    const createBackendSelect = document.getElementById('createBackendSelect');
     const tmuxOptions = document.getElementById('tmuxOptions');
     const createCancelBtn = document.getElementById('createCancelBtn');
     const createConfirmBtn = document.getElementById('createConfirmBtn');
@@ -1228,6 +1426,380 @@
     const FONT_SIZE_STEP = 1;
     const FONT_SIZE_DEFAULT_DESKTOP = 14;
     const FONT_SIZE_DEFAULT_MOBILE = 16;
+
+    const BACKENDS_KEY = 'tmux_ctl_backends';
+    const LAYOUT_KEY = 'tmux_ctl_federated_layout';
+    const HIDDEN_BACKENDS_KEY = 'tmux_ctl_hidden_backends';
+    const LOCAL_BACKEND_ID = 'local';
+
+    let remoteBackends = loadRemoteBackends();
+    let hiddenBackendIds = loadHiddenBackendIds();
+    let draftRemoteBackends = null;
+    let createBackendId = LOCAL_BACKEND_ID;
+    let editingBackendId = null;
+
+    function loadRemoteBackends() {
+      try {
+        const raw = localStorage.getItem(BACKENDS_KEY);
+        const list = raw ? JSON.parse(raw) : [];
+        if (!Array.isArray(list)) return [];
+        return list.filter((b) => b && b.id && b.baseUrl).map(normalizeBackendRecord);
+      } catch {
+        return [];
+      }
+    }
+
+    function saveRemoteBackends(list) {
+      localStorage.setItem(BACKENDS_KEY, JSON.stringify(list));
+      remoteBackends = list.map(normalizeBackendRecord);
+    }
+
+    function loadHiddenBackendIds() {
+      try {
+        const raw = localStorage.getItem(HIDDEN_BACKENDS_KEY);
+        const list = raw ? JSON.parse(raw) : [];
+        if (!Array.isArray(list)) return new Set();
+        return new Set(list.filter(Boolean).map(String));
+      } catch {
+        return new Set();
+      }
+    }
+
+    function saveHiddenBackendIds() {
+      localStorage.setItem(HIDDEN_BACKENDS_KEY, JSON.stringify([...hiddenBackendIds]));
+    }
+
+    function isBackendHidden(backendId) {
+      return hiddenBackendIds.has(backendId);
+    }
+
+    function toggleBackendHidden(backendId) {
+      if (hiddenBackendIds.has(backendId)) {
+        hiddenBackendIds.delete(backendId);
+      } else {
+        hiddenBackendIds.add(backendId);
+      }
+      saveHiddenBackendIds();
+    }
+
+    function backendHideButtonLabel(backendId) {
+      return isBackendHidden(backendId) ? '显示' : '隐藏';
+    }
+
+    function getVisibleBackends() {
+      return getAllBackends().filter((backend) => !isBackendHidden(backend.id));
+    }
+
+    function filterSessionsByVisibleBackends(sessions) {
+      return sessions.filter((session) => !isBackendHidden(session.backendId));
+    }
+
+    function normalizeBackendRecord(backend) {
+      return {
+        id: String(backend.id),
+        name: String(backend.name || backend.id).trim() || String(backend.id),
+        baseUrl: String(backend.baseUrl || '').trim().replace(/\/$/, ''),
+        token: String(backend.token || ''),
+      };
+    }
+
+    function getLocalBackend() {
+      return {
+        id: LOCAL_BACKEND_ID,
+        name: '本机',
+        baseUrl: '',
+        token: '',
+        isLocal: true,
+      };
+    }
+
+    function getAllBackends() {
+      return [getLocalBackend(), ...remoteBackends];
+    }
+
+    function getBackendById(backendId) {
+      if (backendId === LOCAL_BACKEND_ID) return getLocalBackend();
+      return remoteBackends.find((b) => b.id === backendId) || null;
+    }
+
+    function splitCompositeId(compositeId) {
+      const idx = compositeId.indexOf(':');
+      if (idx < 0) {
+        return { backendId: LOCAL_BACKEND_ID, remoteId: compositeId };
+      }
+      return {
+        backendId: compositeId.slice(0, idx),
+        remoteId: compositeId.slice(idx + 1),
+      };
+    }
+
+    function compositeId(backendId, remoteId) {
+      return `${backendId}:${remoteId}`;
+    }
+
+    function slugBackendId(name, baseUrl) {
+      try {
+        const host = new URL(baseUrl).hostname.replace(/\./g, '-');
+        return `${host}-${Math.random().toString(36).slice(2, 6)}`;
+      } catch {
+        const base = (name || 'remote')
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-|-$/g, '');
+        return `${base || 'remote'}-${Math.random().toString(36).slice(2, 6)}`;
+      }
+    }
+
+    function normalizeLocalSession(raw) {
+      const remoteId = raw.id;
+      return {
+        ...raw,
+        id: compositeId(LOCAL_BACKEND_ID, remoteId),
+        remoteId,
+        backendId: LOCAL_BACKEND_ID,
+        backendName: getLocalBackend().name,
+        isLocal: true,
+      };
+    }
+
+    function normalizeRemoteSession(raw, backend) {
+      const remoteId = raw.id;
+      return {
+        ...raw,
+        id: compositeId(backend.id, remoteId),
+        remoteId,
+        backendId: backend.id,
+        backendName: backend.name,
+        isLocal: false,
+      };
+    }
+
+    function loadFederatedLayout() {
+      try {
+        const raw = localStorage.getItem(LAYOUT_KEY);
+        return raw ? JSON.parse(raw) : { order: [], sizes: {} };
+      } catch {
+        return { order: [], sizes: {} };
+      }
+    }
+
+    function saveFederatedLayout(partial) {
+      const layout = { ...loadFederatedLayout(), ...partial };
+      localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout));
+    }
+
+    function hasRemoteBackends() {
+      return remoteBackends.length > 0;
+    }
+
+    function applyFederatedLayoutOverrides(sessions) {
+      const sizes = loadFederatedLayout().sizes || {};
+      return sessions.map((session, index) => {
+        const size = sizes[session.id];
+        if (size) {
+          session.width = size.width ?? session.width;
+          session.height = size.height ?? session.height;
+        }
+        return normalizeSession(session, index);
+      });
+    }
+
+    function sortSessionsByLayout(sessions) {
+      const order = loadFederatedLayout().order || [];
+      if (!order.length) return sessions;
+      const map = new Map(sessions.map((session) => [session.id, session]));
+      const sorted = [];
+      for (const id of order) {
+        if (map.has(id)) {
+          sorted.push(map.get(id));
+          map.delete(id);
+        }
+      }
+      for (const session of map.values()) sorted.push(session);
+      return sorted;
+    }
+
+    async function apiForBackend(backend, path, options = {}) {
+      const method = options.method || 'GET';
+      const headers = { ...(options.headers || {}) };
+      const body = options.body;
+      if (backend.isLocal) {
+        const opts = { ...fetchOpts, method, headers };
+        if (body !== undefined) {
+          headers['Content-Type'] = headers['Content-Type'] || 'application/json';
+          opts.headers = headers;
+          opts.body = typeof body === 'string' ? body : JSON.stringify(body);
+        }
+        return fetch(path, opts);
+      }
+      return fetch('/api/federation/request', {
+        ...fetchOpts,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          baseUrl: backend.baseUrl,
+          path,
+          method,
+          token: backend.token,
+          body: body ?? null,
+        }),
+      });
+    }
+
+    function sessionApiPath(session) {
+      return `/api/sessions/${session.remoteId}`;
+    }
+
+    function renderBackendList() {
+      const list = draftRemoteBackends ?? remoteBackends;
+      backendList.innerHTML = '';
+
+      const localHidden = isBackendHidden(LOCAL_BACKEND_ID);
+      const localRow = document.createElement('div');
+      localRow.className = 'backend-row is-local' + (localHidden ? ' is-hidden-backend' : '');
+      localRow.innerHTML = `
+        <div class="backend-row-main">
+          <div class="backend-row-name">本机</div>
+          <div class="backend-row-url">当前 TMUX Ctl 实例（默认）</div>
+        </div>
+        <div class="backend-row-actions">
+          <button type="button" class="${localHidden ? 'is-active' : ''}" data-action="toggle-hide" data-id="${LOCAL_BACKEND_ID}">${backendHideButtonLabel(LOCAL_BACKEND_ID)}</button>
+        </div>
+      `;
+      backendList.appendChild(localRow);
+
+      list.forEach((backend) => {
+        const hidden = isBackendHidden(backend.id);
+        const row = document.createElement('div');
+        row.className = 'backend-row'
+          + (backend.id === editingBackendId ? ' is-editing' : '')
+          + (hidden ? ' is-hidden-backend' : '');
+        row.innerHTML = `
+          <div class="backend-row-main">
+            <div class="backend-row-name">${escapeHtml(backend.name)}</div>
+            <div class="backend-row-url">${escapeHtml(backend.baseUrl)}</div>
+          </div>
+          <div class="backend-row-actions">
+            <button type="button" class="${hidden ? 'is-active' : ''}" data-action="toggle-hide" data-id="${escapeHtml(backend.id)}">${backendHideButtonLabel(backend.id)}</button>
+            <button type="button" data-action="edit" data-id="${escapeHtml(backend.id)}">编辑</button>
+            <button type="button" data-action="test" data-id="${escapeHtml(backend.id)}">测试</button>
+            <button type="button" class="danger" data-action="remove" data-id="${escapeHtml(backend.id)}">删除</button>
+          </div>
+        `;
+        backendList.appendChild(row);
+      });
+    }
+
+    function resetBackendAddForm() {
+      editingBackendId = null;
+      backendAddName.value = '';
+      backendAddUrl.value = '';
+      backendAddToken.value = '';
+      backendAddToken.placeholder = 'Token（Bearer）';
+      backendAddBtn.textContent = '添加后端';
+      backendCancelEditBtn.hidden = true;
+    }
+
+    function startEditBackend(backend) {
+      editingBackendId = backend.id;
+      backendAddName.value = backend.name;
+      backendAddUrl.value = backend.baseUrl;
+      backendAddToken.value = '';
+      backendAddToken.placeholder = '留空则保持原 token';
+      backendAddBtn.textContent = '保存修改';
+      backendCancelEditBtn.hidden = false;
+      renderBackendList();
+      backendAddName.focus();
+      backendAddName.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+
+    function ensureDraftRemoteBackends() {
+      if (!draftRemoteBackends) {
+        draftRemoteBackends = remoteBackends.map((backend) => ({ ...backend }));
+      }
+    }
+
+    function escapeHtml(text) {
+      return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    async function testBackendConnection(backend) {
+      const res = await apiForBackend(backend, '/api/sessions');
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `HTTP ${res.status}`);
+      }
+      const sessions = await res.json();
+      return Array.isArray(sessions) ? sessions.length : 0;
+    }
+
+    function readBackendDraftFromForm() {
+      return {
+        name: backendAddName.value.trim(),
+        baseUrl: backendAddUrl.value.trim().replace(/\/$/, ''),
+        token: backendAddToken.value.trim(),
+      };
+    }
+
+    function renderCreateBackendSelect() {
+      createBackendSelect.innerHTML = '';
+      getAllBackends().forEach((backend) => {
+        const option = document.createElement('option');
+        option.value = backend.id;
+        option.textContent = backend.name;
+        createBackendSelect.appendChild(option);
+      });
+      if (!getBackendById(createBackendId)) {
+        createBackendId = LOCAL_BACKEND_ID;
+      }
+      createBackendSelect.value = createBackendId;
+    }
+
+    async function loadAllSessions() {
+      const backends = getVisibleBackends();
+      if (!backends.length) {
+        renderSessions([]);
+        return;
+      }
+      const batches = await Promise.allSettled(
+        backends.map(async (backend) => {
+          const res = await apiForBackend(backend, '/api/sessions');
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            throw new Error(data.error || `HTTP ${res.status}`);
+          }
+          const rows = await res.json();
+          return rows.map((row) =>
+            backend.isLocal ? normalizeLocalSession(row) : normalizeRemoteSession(row, backend)
+          );
+        })
+      );
+
+      const failed = [];
+      let merged = [];
+      batches.forEach((result, index) => {
+        const backend = backends[index];
+        if (result.status === 'fulfilled') {
+          merged = merged.concat(result.value);
+        } else {
+          failed.push(backend.name);
+          console.error(`load sessions from ${backend.name} failed:`, result.reason);
+        }
+      });
+
+      merged = applyFederatedLayoutOverrides(merged);
+      if (hasRemoteBackends()) {
+        merged = sortSessionsByLayout(merged);
+      }
+      renderSessions(merged);
+      if (failed.length) {
+        showToast(`部分后端加载失败: ${failed.join(', ')}`);
+      }
+    }
 
     let activeView = null;
     let isMobile = false;
@@ -1373,16 +1945,26 @@
 
     function openSettingsModal() {
       updateFontSizeControls(getTerminalFontSize());
+      resetBackendAddForm();
+      draftRemoteBackends = remoteBackends.map((backend) => ({ ...backend }));
+      renderBackendList();
       settingsModal.classList.add('active');
     }
 
     function confirmSettingsModal() {
       if (!applySettingsFontSize()) return;
+      if (draftRemoteBackends) {
+        saveRemoteBackends(draftRemoteBackends);
+        draftRemoteBackends = null;
+      }
       settingsModal.classList.remove('active');
+      loadAllSessions();
     }
 
     function cancelSettingsModal() {
       updateFontSizeControls(getTerminalFontSize());
+      resetBackendAddForm();
+      draftRemoteBackends = null;
       settingsModal.classList.remove('active');
     }
 
@@ -1441,7 +2023,12 @@
       const titleEl = cell.querySelector('.cell-title-display');
       const baseTitle = (titleEl?.textContent || '').trim() || `session-${mobilePagerIndex + 1}`;
       const rank = recencyOrder.indexOf(cell.dataset.id);
-      mobilePagerTitle.textContent = rank >= 0 ? `${rank} · ${baseTitle}` : baseTitle;
+      const backendPrefix = hasRemoteBackends() && cell.dataset.backendName
+        ? `[${cell.dataset.backendName}] `
+        : '';
+      mobilePagerTitle.textContent = rank >= 0
+        ? `${backendPrefix}${rank} · ${baseTitle}`
+        : `${backendPrefix}${baseTitle}`;
       mobilePagerIndexEl.textContent = `${mobilePagerIndex + 1} / ${cells.length}`;
       mobilePagerDots.querySelectorAll('.mobile-pager-dot').forEach((dot, i) => {
         dot.classList.toggle('active', i === mobilePagerIndex);
@@ -1588,11 +2175,15 @@
       if (sourceEl) sourceEl.textContent = value;
       session.title = value;
 
-      const res = await fetch(`/api/sessions/${session.id}`, {
-        ...fetchOpts,
+      const backend = getBackendById(session.backendId);
+      if (!backend) {
+        showToast('后端不存在');
+        return false;
+      }
+
+      const res = await apiForBackend(backend, sessionApiPath(session), {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: value }),
+        body: { title: value },
       });
       if (!res.ok) {
         showToast('保存备注失败');
@@ -1639,12 +2230,20 @@
     async function persistSessionOrder() {
       const order = gridSessionOrder();
       if (!order.length) return;
+      if (hasRemoteBackends()) {
+        saveFederatedLayout({ order });
+      }
+      const localOrder = order
+        .map(splitCompositeId)
+        .filter(({ backendId }) => backendId === LOCAL_BACKEND_ID)
+        .map(({ remoteId }) => remoteId);
+      if (!localOrder.length) return;
       try {
         const res = await fetch('/api/sessions/order', {
           ...fetchOpts,
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ order }),
+          body: JSON.stringify({ order: localOrder }),
         });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
@@ -1769,12 +2368,16 @@
     let sizeSaveTimer = null;
 
     async function persistSessionSize(session) {
+      const layout = loadFederatedLayout();
+      layout.sizes = layout.sizes || {};
+      layout.sizes[session.id] = { width: session.width, height: session.height };
+      saveFederatedLayout(layout);
+      if (!session.isLocal) return;
       try {
-        const res = await fetch(`/api/sessions/${session.id}`, {
-          ...fetchOpts,
+        const backend = getLocalBackend();
+        const res = await apiForBackend(backend, sessionApiPath(session), {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ width: session.width, height: session.height }),
+          body: { width: session.width, height: session.height },
         });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
@@ -1997,6 +2600,7 @@
       const cell = document.createElement('div');
       cell.className = 'cell';
       cell.dataset.id = session.id;
+      cell.dataset.backendName = session.backendName || '';
       applyCellSize(cell, session, session.width, session.height);
 
       const header = document.createElement('div');
@@ -2017,9 +2621,17 @@
       attachTitleEditor(session, titleEl);
       header.appendChild(titleEl);
 
+      if (hasRemoteBackends()) {
+        const backendTag = document.createElement('span');
+        backendTag.className = 'cell-backend-tag';
+        backendTag.textContent = session.backendName || '本机';
+        backendTag.title = `后端: ${session.backendName || '本机'}`;
+        header.appendChild(backendTag);
+      }
+
       const tmuxEl = document.createElement('span');
       tmuxEl.className = 'tmux-id';
-      tmuxEl.textContent = session.tmuxSession || `agent-${session.id}`;
+      tmuxEl.textContent = session.tmuxSession || `agent-${session.remoteId}`;
       tmuxEl.title = 'tmux session 名称（tmux attach -t ...）';
 
       const actions = document.createElement('div');
@@ -2056,7 +2668,19 @@
             mobilePagerIndex -= 1;
           }
         }
-        await fetch(`/api/sessions/${session.id}`, { ...fetchOpts, method: 'DELETE' });
+        const backend = getBackendById(session.backendId);
+        if (!backend) {
+          showToast('后端不存在');
+          return;
+        }
+        const delRes = await apiForBackend(backend, sessionApiPath(session), {
+          method: 'DELETE',
+        });
+        if (!delRes.ok) {
+          const data = await delRes.json().catch(() => ({}));
+          showToast(data.error || '关闭 session 失败');
+          return;
+        }
         cell.remove();
         removeRecency(session.id);
         updateEmptyState();
@@ -2145,14 +2769,12 @@
 
     async function loadSessions() {
       try {
-        const res = await fetch('/api/sessions', fetchOpts);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const sessions = await res.json();
-        renderSessions(sessions);
+        await loadAllSessions();
       } catch (err) {
         console.error('loadSessions failed:', err);
-        if (initialSessions.length && !grid.querySelector('.cell')) {
-          renderSessions(initialSessions);
+        const fallback = filterSessionsByVisibleBackends(initialSessions.map(normalizeLocalSession));
+        if (fallback.length && !grid.querySelector('.cell')) {
+          renderSessions(fallback);
         }
         showToast('加载 session 失败，已使用缓存数据');
       }
@@ -2164,14 +2786,25 @@
       }
       resetLayoutBtn.disabled = true;
       try {
-        const res = await fetch('/api/sessions/reset-layout', { ...fetchOpts, method: 'POST' });
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          showToast(data.error || '重置窗口失败');
+        const localRes = await fetch('/api/sessions/reset-layout', { ...fetchOpts, method: 'POST' });
+        if (!localRes.ok) {
+          const data = await localRes.json().catch(() => ({}));
+          showToast(data.error || '重置本机窗口失败');
           return;
         }
-        const sessions = await res.json();
-        renderSessions(sessions);
+        const remoteResults = await Promise.allSettled(
+          remoteBackends.map((backend) =>
+            apiForBackend(backend, '/api/sessions/reset-layout', { method: 'POST' })
+          )
+        );
+        const failed = remoteResults
+          .map((result, index) => (result.status === 'rejected' || !result.value?.ok ? remoteBackends[index].name : null))
+          .filter(Boolean);
+        saveFederatedLayout({ sizes: {} });
+        await loadAllSessions();
+        if (failed.length) {
+          showToast(`部分远程重置失败: ${failed.join(', ')}`);
+        }
       } catch (err) {
         showToast('重置窗口失败: ' + err.message);
       } finally {
@@ -2241,19 +2874,25 @@
       }
     }
 
-    async function openCreateModal() {
-      createModal.classList.add('active');
+    async function loadTmuxOptionsForBackend(backendId) {
       renderTmuxOptions([]);
-
+      const backend = getBackendById(backendId);
+      if (!backend) return;
       try {
-        const res = await fetch('/api/tmux/sessions', fetchOpts);
+        const res = await apiForBackend(backend, '/api/tmux/sessions');
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         renderTmuxOptions(data.available || []);
       } catch (err) {
         console.error('load tmux sessions failed:', err);
-        showToast('加载 tmux session 列表失败');
+        showToast(`加载 ${backend.name} 的 tmux 列表失败`);
       }
+    }
+
+    async function openCreateModal() {
+      renderCreateBackendSelect();
+      createModal.classList.add('active');
+      await loadTmuxOptionsForBackend(createBackendSelect.value);
     }
 
     function selectedTmuxChoice() {
@@ -2261,23 +2900,36 @@
       return checked ? checked.value.trim() : '';
     }
 
-    async function createSession(tmuxSession) {
+    async function createSession(tmuxSession, backendId) {
       createConfirmBtn.disabled = true;
       addBtn.disabled = true;
+      const backend = getBackendById(backendId || createBackendSelect.value || LOCAL_BACKEND_ID);
+      if (!backend) {
+        showToast('请选择有效后端');
+        createConfirmBtn.disabled = false;
+        addBtn.disabled = false;
+        return;
+      }
       try {
-        const opts = { ...fetchOpts, method: 'POST' };
-        if (tmuxSession) {
-          opts.headers = { 'Content-Type': 'application/json' };
-          opts.body = JSON.stringify({ tmuxSession });
-        }
-        const res = await fetch('/api/sessions', opts);
+        const body = tmuxSession ? { tmuxSession } : undefined;
+        const res = await apiForBackend(backend, '/api/sessions', {
+          method: 'POST',
+          body,
+        });
         const data = await res.json();
         if (!res.ok) {
           showToast(data.error || '创建 session 失败');
           return;
         }
+        const session = backend.isLocal
+          ? normalizeLocalSession(data)
+          : normalizeRemoteSession(data, backend);
         closeCreateModal();
-        grid.appendChild(createCell(data, grid.querySelectorAll('.cell').length));
+        grid.appendChild(createCell(session, grid.querySelectorAll('.cell').length));
+        if (hasRemoteBackends()) {
+          saveFederatedLayout({ order: gridSessionOrder() });
+        }
+        schedulePersistSessionOrder();
         updateEmptyState();
         if (isMobile) {
           requestAnimationFrame(refreshAllCellFrames);
@@ -2300,7 +2952,145 @@
       if (e.target === createModal) closeCreateModal();
     });
     createConfirmBtn.addEventListener('click', () => {
-      createSession(selectedTmuxChoice());
+      createSession(selectedTmuxChoice(), createBackendSelect.value);
+    });
+
+    createBackendSelect.addEventListener('change', () => {
+      createBackendId = createBackendSelect.value;
+      loadTmuxOptionsForBackend(createBackendId);
+    });
+
+    backendList.addEventListener('click', async (e) => {
+      const btn = e.target.closest('button[data-action]');
+      if (!btn) return;
+      const backendId = btn.dataset.id;
+      const action = btn.dataset.action;
+
+      if (action === 'toggle-hide') {
+        toggleBackendHidden(backendId);
+        renderBackendList();
+        await loadAllSessions();
+        const backend = getBackendById(backendId);
+        const name = backend ? backend.name : backendId;
+        showToast(isBackendHidden(backendId) ? `已隐藏 ${name}` : `已显示 ${name}`);
+        return;
+      }
+
+      if (!draftRemoteBackends) return;
+      const backend = draftRemoteBackends.find((item) => item.id === backendId);
+      if (!backend) return;
+
+      if (action === 'remove') {
+        if (editingBackendId === backendId) {
+          resetBackendAddForm();
+        }
+        hiddenBackendIds.delete(backendId);
+        saveHiddenBackendIds();
+        draftRemoteBackends = draftRemoteBackends.filter((item) => item.id !== backendId);
+        renderBackendList();
+        return;
+      }
+
+      if (action === 'edit') {
+        startEditBackend(backend);
+        return;
+      }
+
+      if (action === 'test') {
+        btn.disabled = true;
+        try {
+          const count = await testBackendConnection({ ...backend, isLocal: false });
+          showToast(`${backend.name} 连接成功（${count} 个 session）`);
+        } catch (err) {
+          showToast(`${backend.name} 连接失败: ${err.message}`);
+        } finally {
+          btn.disabled = false;
+        }
+      }
+    });
+
+    backendTestBtn.addEventListener('click', async () => {
+      const draft = readBackendDraftFromForm();
+      if (!draft.baseUrl) {
+        showToast('请填写后端地址');
+        return;
+      }
+      backendTestBtn.disabled = true;
+      try {
+        const backend = normalizeBackendRecord({
+          id: 'test',
+          name: draft.name || '测试',
+          baseUrl: draft.baseUrl,
+          token: draft.token,
+        });
+        const count = await testBackendConnection({ ...backend, isLocal: false });
+        showToast(`连接成功（${count} 个 session）`);
+      } catch (err) {
+        showToast(`连接失败: ${err.message}`);
+      } finally {
+        backendTestBtn.disabled = false;
+      }
+    });
+
+    backendCancelEditBtn.addEventListener('click', () => {
+      resetBackendAddForm();
+      renderBackendList();
+    });
+
+    backendAddBtn.addEventListener('click', () => {
+      const draft = readBackendDraftFromForm();
+      if (!draft.baseUrl) {
+        showToast('请填写后端地址');
+        return;
+      }
+      ensureDraftRemoteBackends();
+
+      if (editingBackendId) {
+        const index = draftRemoteBackends.findIndex((item) => item.id === editingBackendId);
+        if (index < 0) {
+          resetBackendAddForm();
+          renderBackendList();
+          showToast('编辑的后端不存在');
+          return;
+        }
+        const existing = draftRemoteBackends[index];
+        const name = draft.name || (() => {
+          try {
+            return new URL(draft.baseUrl).hostname;
+          } catch {
+            return existing.name;
+          }
+        })();
+        draftRemoteBackends[index] = normalizeBackendRecord({
+          id: existing.id,
+          name,
+          baseUrl: draft.baseUrl,
+          token: draft.token || existing.token,
+        });
+        resetBackendAddForm();
+        renderBackendList();
+        showToast(`已更新 ${name}`);
+        confirmSettingsModal();
+        return;
+      }
+
+      const name = draft.name || (() => {
+        try {
+          return new URL(draft.baseUrl).hostname;
+        } catch {
+          return '远程后端';
+        }
+      })();
+      draftRemoteBackends.push(normalizeBackendRecord({
+        id: slugBackendId(name, draft.baseUrl),
+        name,
+        baseUrl: draft.baseUrl,
+        token: draft.token,
+      }));
+      resetBackendAddForm();
+      renderBackendList();
+      showToast(`已添加 ${name}`);
+      confirmSettingsModal();
     });
 
     document.addEventListener('keydown', (e) => {
@@ -2406,7 +3196,7 @@
 
     applyMobileMode();
     updateFontSizeControls(getTerminalFontSize());
-    renderSessions(initialSessions);
+    renderSessions(filterSessionsByVisibleBackends(initialSessions.map(normalizeLocalSession)));
     loadSessions();
   </script>
 </body>

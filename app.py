@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import atexit
+import json as json_module
 import os
 import secrets
 import shutil
@@ -18,7 +19,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
-from flask import Flask, jsonify, redirect, render_template, request
+from flask import Flask, Response, jsonify, redirect, render_template, request
 
 import db
 
@@ -638,6 +639,57 @@ def delete_session(session_id: str):
     _kill_tmux_session(session_id, tmux_name)
     db.delete_session(session_id)
     return jsonify({"ok": True})
+
+
+_FEDERATION_METHODS = frozenset({"GET", "POST", "PUT", "PATCH", "DELETE"})
+
+
+@app.route("/api/federation/request", methods=["POST"])
+def federation_request():
+    """Proxy API calls to remote TMUX Ctl instances (avoids browser CORS)."""
+    data = request.get_json(silent=True) or {}
+    base_url = str(data.get("baseUrl") or "").strip().rstrip("/")
+    path = str(data.get("path") or "").strip()
+    method = str(data.get("method") or "GET").upper()
+    token = str(data.get("token") or "").strip()
+    body = data.get("body")
+
+    if not base_url or not path.startswith("/"):
+        return jsonify({"error": "baseUrl and path required"}), 400
+    if method not in _FEDERATION_METHODS:
+        return jsonify({"error": "invalid method"}), 400
+
+    url = base_url + path
+    headers: dict[str, str] = {}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    payload: bytes | None = None
+    if body is not None and method in ("POST", "PUT", "PATCH"):
+        headers["Content-Type"] = "application/json"
+        payload = json_module.dumps(body).encode("utf-8")
+
+    req = urllib.request.Request(url, data=payload, method=method, headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            raw = resp.read()
+            status = resp.getcode()
+            content_type = resp.headers.get("Content-Type", "application/json")
+    except urllib.error.HTTPError as exc:
+        raw = exc.read()
+        status = exc.code
+        content_type = exc.headers.get("Content-Type", "application/json")
+    except urllib.error.URLError as exc:
+        return jsonify({"error": f"remote request failed: {exc.reason}"}), 502
+
+    if "application/json" in content_type.lower():
+        try:
+            parsed = json_module.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json_module.JSONDecodeError):
+            return Response(raw, status=status, mimetype=content_type)
+        return jsonify(parsed), status
+
+    return Response(raw, status=status, mimetype=content_type)
 
 
 def _parse_args() -> argparse.Namespace:
