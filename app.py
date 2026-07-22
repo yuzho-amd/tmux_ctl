@@ -641,6 +641,32 @@ def delete_session(session_id: str):
     return jsonify({"ok": True})
 
 
+@app.route("/api/backends", methods=["GET"])
+def list_backends():
+    return jsonify(
+        {
+            "localHidden": db.get_local_backend_hidden(),
+            "backends": db.list_remote_backends(),
+        }
+    )
+
+
+@app.route("/api/backends", methods=["PUT"])
+def replace_backends():
+    data = request.get_json(silent=True) or {}
+    backends = data.get("backends")
+    if not isinstance(backends, list):
+        return jsonify({"error": "backends must be a list"}), 400
+    db.set_local_backend_hidden(bool(data.get("localHidden")))
+    db.replace_remote_backends(backends)
+    return jsonify(
+        {
+            "localHidden": db.get_local_backend_hidden(),
+            "backends": db.list_remote_backends(),
+        }
+    )
+
+
 _FEDERATION_METHODS = frozenset({"GET", "POST", "PUT", "PATCH", "DELETE"})
 
 

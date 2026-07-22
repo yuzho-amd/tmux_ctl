@@ -1337,7 +1337,7 @@
         <p class="settings-row-hint">范围 6–24，对所有 tmux 终端生效。调整完成后点击「完成」才会重载终端页面。</p>
         <div class="settings-section">
           <div class="settings-section-title">远程后端</div>
-          <p class="settings-row-hint">聚合多台 TMUX Ctl 的 session；远程实例无需修改，填写地址与 token 即可。点「隐藏」可暂时不显示该后端的 session。</p>
+          <p class="settings-row-hint">聚合多台 TMUX Ctl 的 session；远程实例无需修改，填写地址与 token 即可。配置保存在服务器，换浏览器也会保留。点「隐藏」可暂时不显示该后端的 session。</p>
           <div class="backend-list" id="backendList"></div>
           <div class="backend-add-form">
             <input type="text" id="backendAddName" placeholder="名称，如 xcomx300-1" autocomplete="off">
@@ -1432,13 +1432,13 @@
     const HIDDEN_BACKENDS_KEY = 'tmux_ctl_hidden_backends';
     const LOCAL_BACKEND_ID = 'local';
 
-    let remoteBackends = loadRemoteBackends();
-    let hiddenBackendIds = loadHiddenBackendIds();
+    let remoteBackends = [];
+    let localBackendHidden = false;
     let draftRemoteBackends = null;
     let createBackendId = LOCAL_BACKEND_ID;
     let editingBackendId = null;
 
-    function loadRemoteBackends() {
+    function loadLegacyBackendsFromLocalStorage() {
       try {
         const raw = localStorage.getItem(BACKENDS_KEY);
         const list = raw ? JSON.parse(raw) : [];
@@ -1449,12 +1449,7 @@
       }
     }
 
-    function saveRemoteBackends(list) {
-      localStorage.setItem(BACKENDS_KEY, JSON.stringify(list));
-      remoteBackends = list.map(normalizeBackendRecord);
-    }
-
-    function loadHiddenBackendIds() {
+    function loadLegacyHiddenFromLocalStorage() {
       try {
         const raw = localStorage.getItem(HIDDEN_BACKENDS_KEY);
         const list = raw ? JSON.parse(raw) : [];
@@ -1465,21 +1460,103 @@
       }
     }
 
-    function saveHiddenBackendIds() {
-      localStorage.setItem(HIDDEN_BACKENDS_KEY, JSON.stringify([...hiddenBackendIds]));
+    function applyBackendState(data) {
+      localBackendHidden = Boolean(data.localHidden);
+      remoteBackends = (data.backends || []).map(normalizeBackendRecord);
+    }
+
+    async function fetchBackendsFromServer() {
+      const res = await fetch('/api/backends', fetchOpts);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `HTTP ${res.status}`);
+      }
+      return res.json();
+    }
+
+    async function persistBackendsToServer(backends, localHidden = localBackendHidden) {
+      const res = await fetch('/api/backends', {
+        ...fetchOpts,
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          localHidden,
+          backends: backends.map((backend) => ({
+            id: backend.id,
+            name: backend.name,
+            baseUrl: backend.baseUrl,
+            token: backend.token,
+            hidden: Boolean(backend.hidden),
+          })),
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `HTTP ${res.status}`);
+      }
+      applyBackendState(await res.json());
+    }
+
+    async function initBackends() {
+      try {
+        const data = await fetchBackendsFromServer();
+        const legacyBackends = loadLegacyBackendsFromLocalStorage();
+        const legacyHidden = loadLegacyHiddenFromLocalStorage();
+        const needsMigration =
+          (!data.backends || data.backends.length === 0)
+          && !data.localHidden
+          && (legacyBackends.length > 0 || legacyHidden.size > 0);
+        if (needsMigration) {
+          localBackendHidden = legacyHidden.has(LOCAL_BACKEND_ID);
+          remoteBackends = legacyBackends.map((backend) => ({
+            ...backend,
+            hidden: legacyHidden.has(backend.id),
+          }));
+          await persistBackendsToServer(remoteBackends, localBackendHidden);
+          localStorage.removeItem(BACKENDS_KEY);
+          localStorage.removeItem(HIDDEN_BACKENDS_KEY);
+          showToast('已将浏览器中的远程后端配置迁移到服务器');
+          return;
+        }
+        applyBackendState(data);
+      } catch (err) {
+        console.error('initBackends failed:', err);
+        const legacyHidden = loadLegacyHiddenFromLocalStorage();
+        remoteBackends = loadLegacyBackendsFromLocalStorage().map((backend) => ({
+          ...backend,
+          hidden: legacyHidden.has(backend.id),
+        }));
+        localBackendHidden = legacyHidden.has(LOCAL_BACKEND_ID);
+      }
     }
 
     function isBackendHidden(backendId) {
-      return hiddenBackendIds.has(backendId);
+      if (backendId === LOCAL_BACKEND_ID) return localBackendHidden;
+      const list = draftRemoteBackends ?? remoteBackends;
+      const backend = list.find((item) => item.id === backendId);
+      return Boolean(backend?.hidden);
     }
 
-    function toggleBackendHidden(backendId) {
-      if (hiddenBackendIds.has(backendId)) {
-        hiddenBackendIds.delete(backendId);
+    async function toggleBackendHidden(backendId) {
+      if (backendId === LOCAL_BACKEND_ID) {
+        localBackendHidden = !localBackendHidden;
       } else {
-        hiddenBackendIds.add(backendId);
+        const lists = [remoteBackends];
+        if (draftRemoteBackends) lists.push(draftRemoteBackends);
+        for (const list of lists) {
+          const backend = list.find((item) => item.id === backendId);
+          if (backend) backend.hidden = !backend.hidden;
+        }
       }
-      saveHiddenBackendIds();
+      try {
+        await persistBackendsToServer(
+          draftRemoteBackends ?? remoteBackends,
+          localBackendHidden
+        );
+      } catch (err) {
+        showToast('保存后端设置失败: ' + err.message);
+        throw err;
+      }
     }
 
     function backendHideButtonLabel(backendId) {
@@ -1500,6 +1577,7 @@
         name: String(backend.name || backend.id).trim() || String(backend.id),
         baseUrl: String(backend.baseUrl || '').trim().replace(/\/$/, ''),
         token: String(backend.token || ''),
+        hidden: Boolean(backend.hidden),
       };
     }
 
@@ -1951,11 +2029,16 @@
       settingsModal.classList.add('active');
     }
 
-    function confirmSettingsModal() {
+    async function confirmSettingsModal() {
       if (!applySettingsFontSize()) return;
       if (draftRemoteBackends) {
-        saveRemoteBackends(draftRemoteBackends);
-        draftRemoteBackends = null;
+        try {
+          await persistBackendsToServer(draftRemoteBackends, localBackendHidden);
+          draftRemoteBackends = null;
+        } catch (err) {
+          showToast('保存后端设置失败: ' + err.message);
+          return;
+        }
       }
       settingsModal.classList.remove('active');
       loadAllSessions();
@@ -2967,12 +3050,16 @@
       const action = btn.dataset.action;
 
       if (action === 'toggle-hide') {
-        toggleBackendHidden(backendId);
-        renderBackendList();
-        await loadAllSessions();
-        const backend = getBackendById(backendId);
-        const name = backend ? backend.name : backendId;
-        showToast(isBackendHidden(backendId) ? `已隐藏 ${name}` : `已显示 ${name}`);
+        try {
+          await toggleBackendHidden(backendId);
+          renderBackendList();
+          await loadAllSessions();
+          const backend = getBackendById(backendId);
+          const name = backend ? backend.name : backendId;
+          showToast(isBackendHidden(backendId) ? `已隐藏 ${name}` : `已显示 ${name}`);
+        } catch {
+          renderBackendList();
+        }
         return;
       }
 
@@ -2984,8 +3071,6 @@
         if (editingBackendId === backendId) {
           resetBackendAddForm();
         }
-        hiddenBackendIds.delete(backendId);
-        saveHiddenBackendIds();
         draftRemoteBackends = draftRemoteBackends.filter((item) => item.id !== backendId);
         renderBackendList();
         return;
@@ -3037,7 +3122,7 @@
       renderBackendList();
     });
 
-    backendAddBtn.addEventListener('click', () => {
+    backendAddBtn.addEventListener('click', async () => {
       const draft = readBackendDraftFromForm();
       if (!draft.baseUrl) {
         showToast('请填写后端地址');
@@ -3066,11 +3151,12 @@
           name,
           baseUrl: draft.baseUrl,
           token: draft.token || existing.token,
+          hidden: Boolean(existing.hidden),
         });
         resetBackendAddForm();
         renderBackendList();
         showToast(`已更新 ${name}`);
-        confirmSettingsModal();
+        await confirmSettingsModal();
         return;
       }
 
@@ -3086,11 +3172,12 @@
         name,
         baseUrl: draft.baseUrl,
         token: draft.token,
+        hidden: false,
       }));
       resetBackendAddForm();
       renderBackendList();
       showToast(`已添加 ${name}`);
-      confirmSettingsModal();
+      await confirmSettingsModal();
     });
 
     document.addEventListener('keydown', (e) => {
@@ -3196,8 +3283,11 @@
 
     applyMobileMode();
     updateFontSizeControls(getTerminalFontSize());
-    renderSessions(filterSessionsByVisibleBackends(initialSessions.map(normalizeLocalSession)));
-    loadSessions();
+    (async () => {
+      await initBackends();
+      renderSessions(filterSessionsByVisibleBackends(initialSessions.map(normalizeLocalSession)));
+      loadSessions();
+    })();
   </script>
 </body>
 </html>

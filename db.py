@@ -70,6 +70,98 @@ def init_db() -> None:
         )
         _backfill_sort_order(conn)
         _backfill_default_titles(conn)
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS remote_backends (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                base_url TEXT NOT NULL,
+                token TEXT NOT NULL DEFAULT '',
+                hidden INTEGER NOT NULL DEFAULT 0,
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS ui_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            )
+            """
+        )
+
+
+def get_ui_setting(key: str, default: str = "") -> str:
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT value FROM ui_settings WHERE key = ?",
+            (key,),
+        ).fetchone()
+    if row is None:
+        return default
+    return str(row["value"])
+
+
+def set_ui_setting(key: str, value: str) -> None:
+    with _connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO ui_settings (key, value) VALUES (?, ?)
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value
+            """,
+            (key, value),
+        )
+
+
+def get_local_backend_hidden() -> bool:
+    return get_ui_setting("local_backend_hidden", "0") == "1"
+
+
+def set_local_backend_hidden(hidden: bool) -> None:
+    set_ui_setting("local_backend_hidden", "1" if hidden else "0")
+
+
+def list_remote_backends() -> list[dict[str, object]]:
+    with _connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, name, base_url, token, hidden, sort_order, created_at
+            FROM remote_backends
+            ORDER BY sort_order ASC, created_at ASC
+            """
+        ).fetchall()
+    return [
+        {
+            "id": row["id"],
+            "name": row["name"],
+            "baseUrl": row["base_url"],
+            "token": row["token"],
+            "hidden": bool(row["hidden"]),
+        }
+        for row in rows
+    ]
+
+
+def replace_remote_backends(backends: list[dict[str, object]]) -> None:
+    with _connect() as conn:
+        conn.execute("DELETE FROM remote_backends")
+        for index, backend in enumerate(backends):
+            backend_id = str(backend.get("id") or "").strip()
+            base_url = str(backend.get("baseUrl") or "").strip().rstrip("/")
+            if not backend_id or not base_url:
+                continue
+            name = str(backend.get("name") or backend_id).strip() or backend_id
+            token = str(backend.get("token") or "")
+            hidden = 1 if backend.get("hidden") else 0
+            conn.execute(
+                """
+                INSERT INTO remote_backends (id, name, base_url, token, hidden, sort_order)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (backend_id, name, base_url, token, hidden, index),
+            )
 
 
 def _backfill_sort_order(conn: sqlite3.Connection) -> None:
