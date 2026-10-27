@@ -214,7 +214,17 @@ def _spawn_ttyd(
     ttyd: str, port: int, index_html: str, tmux_name: str
 ) -> subprocess.Popen[Any]:
     return subprocess.Popen(
-        [ttyd, "-p", str(port), "-W", "-I", index_html, *_shell_command(tmux_name)],
+        [
+            ttyd,
+            "-p",
+            str(port),
+            "-W",
+            "-t",
+            "scrollback=50000",
+            "-I",
+            index_html,
+            *_shell_command(tmux_name),
+        ],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         start_new_session=True,
